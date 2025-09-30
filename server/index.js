@@ -25,7 +25,7 @@ app.get("/api/health", (_req, res) => {
 const SHIPPING_API_URL = "https://ship.stallionexpress.ca/api/v4/rates";
 app.post("/api/quote", async (req, res) => {
   try {
-    const token = process.env.API_Token_stallion || process.env.STALLION_API_TOKEN;
+    const token = process.env.STALLION_API_TOKEN;
     if (!token) {
       return res.status(500).json({ message: "API token not configured" });
     }
