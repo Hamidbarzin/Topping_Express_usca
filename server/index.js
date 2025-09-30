@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import process from "process";
+import { randomUUID } from "crypto";
 
 // Resolve __dirname in ESM
 const __dirname = path.dirname(new URL(import.meta.url).pathname);
@@ -110,6 +111,55 @@ app.post("/api/quote", async (req, res) => {
   } catch (err) {
     log(`Quote error: ${err?.message || err}`, "error");
     res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// Order submission endpoint
+app.post("/api/order", async (req, res) => {
+  try {
+    const { sender, recipient, package: packageInfo, selectedService } = req.body;
+    
+    if (!sender || !recipient || !packageInfo || !selectedService) {
+      return res.status(400).json({ message: "Missing required order data" });
+    }
+
+    // Generate order details
+    const orderId = randomUUID();
+    const today = new Date();
+    const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+    const sequence = String(Date.now()).slice(-4);
+    const orderNumber = `TC-${dateStr}-${sequence}`;
+    const trackingNumber = `ST${Date.now()}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`;
+
+    const order = {
+      id: orderId,
+      orderNumber,
+      date: today.toISOString().split("T")[0],
+      sender,
+      recipient,
+      package: packageInfo,
+      selectedService,
+      trackingNumber,
+      status: "confirmed"
+    };
+
+    // For now, just log the order (in production, save to database)
+    log(`Order created: ${orderNumber}`, "order");
+    log(`Sender: ${sender.name} <${sender.email}>`, "order");
+    log(`Recipient: ${recipient.name} <${recipient.email}>`, "order");
+    log(`Service: ${selectedService.service_name} - $${selectedService.total} CAD`, "order");
+
+    res.json({ 
+      success: true, 
+      orderId: orderId,
+      orderNumber: orderNumber,
+      trackingNumber: trackingNumber,
+      message: "Order created successfully" 
+    });
+
+  } catch (err) {
+    log(`Order error: ${err?.message || err}`, "error");
+    res.status(500).json({ message: "Failed to create order" });
   }
 });
 
