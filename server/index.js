@@ -26,7 +26,9 @@ const SHIPPING_API_URL = "https://ship.stallionexpress.ca/api/v4/rates";
 app.post("/api/quote", async (req, res) => {
   try {
     const token = process.env.STALLION_API_TOKEN;
+    log(`Quote request received. Token exists: ${!!token}`, "quote");
     if (!token) {
+      log("STALLION_API_TOKEN not found in environment", "error");
       return res.status(500).json({ message: "API token not configured" });
     }
 
