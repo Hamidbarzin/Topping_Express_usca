@@ -354,6 +354,7 @@ app.get('/api/orders/:orderId', async (req, res) => {
       createdAt: new Date().toISOString(),
       sender: {
         name: "John Doe",
+        fullName: "John Doe",  // Frontend expects fullName
         email: "john@example.com",
         phone: "+1234567890",
         address: "123 Main St",
@@ -363,6 +364,7 @@ app.get('/api/orders/:orderId', async (req, res) => {
       },
       recipient: {
         name: "Jane Smith",
+        fullName: "Jane Smith",  // Frontend expects fullName
         email: "jane@example.com",
         phone: "+1987654321",
         address: "456 Oak Ave",
