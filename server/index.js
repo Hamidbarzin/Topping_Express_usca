@@ -372,7 +372,8 @@ app.post("/api/order", async (req, res) => {
 
     res.json({ 
       success: true, 
-      orderId: orderId,
+      id: orderId,           // Frontend might expect 'id'
+      orderId: orderId,      // Keep both for compatibility
       orderNumber: orderNumber,
       trackingNumber: trackingNumber,
       message: "Order created successfully" 
