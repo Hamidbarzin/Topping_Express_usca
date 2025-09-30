@@ -114,13 +114,70 @@ app.post("/api/quote", async (req, res) => {
   }
 });
 
-// Order submission endpoint
-app.post("/api/order", async (req, res) => {
+// Order creation endpoint with Stallion API integration
+app.post("/api/orders", async (req, res) => {
   try {
     const { sender, recipient, package: packageInfo, selectedService } = req.body;
     
+    // Validate required fields
     if (!sender || !recipient || !packageInfo || !selectedService) {
-      return res.status(400).json({ message: "Missing required order data" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Missing required order data",
+        errors: {
+          sender: !sender ? "Sender information is required" : null,
+          recipient: !recipient ? "Recipient information is required" : null,
+          package: !packageInfo ? "Package information is required" : null,
+          selectedService: !selectedService ? "Selected service is required" : null
+        }
+      });
+    }
+
+    // Validate sender fields
+    const senderErrors = [];
+    if (!sender.name) senderErrors.push("Sender name is required");
+    if (!sender.address) senderErrors.push("Sender address is required");
+    if (!sender.city) senderErrors.push("Sender city is required");
+    if (!sender.postalCode) senderErrors.push("Sender postal code is required");
+    if (!sender.country) senderErrors.push("Sender country is required");
+    if (!sender.phone) senderErrors.push("Sender phone is required");
+    if (!sender.email) senderErrors.push("Sender email is required");
+
+    // Validate recipient fields
+    const recipientErrors = [];
+    if (!recipient.name) recipientErrors.push("Recipient name is required");
+    if (!recipient.address) recipientErrors.push("Recipient address is required");
+    if (!recipient.city) recipientErrors.push("Recipient city is required");
+    if (!recipient.postalCode) recipientErrors.push("Recipient postal code is required");
+    if (!recipient.country) recipientErrors.push("Recipient country is required");
+    if (!recipient.phone) recipientErrors.push("Recipient phone is required");
+    if (!recipient.email) recipientErrors.push("Recipient email is required");
+
+    // Validate package fields
+    const packageErrors = [];
+    if (!packageInfo.weight || packageInfo.weight <= 0) packageErrors.push("Package weight must be greater than 0");
+    if (!packageInfo.length || packageInfo.length <= 0) packageErrors.push("Package length must be greater than 0");
+    if (!packageInfo.width || packageInfo.width <= 0) packageErrors.push("Package width must be greater than 0");
+    if (!packageInfo.height || packageInfo.height <= 0) packageErrors.push("Package height must be greater than 0");
+    if (!packageInfo.value || packageInfo.value <= 0) packageErrors.push("Package value must be greater than 0");
+
+    const allErrors = [...senderErrors, ...recipientErrors, ...packageErrors];
+    if (allErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: allErrors
+      });
+    }
+
+    // Check API token
+    const token = process.env.STALLION_API_TOKEN;
+    if (!token) {
+      log("STALLION_API_TOKEN not found in environment", "error");
+      return res.status(500).json({ 
+        success: false,
+        message: "API token not configured" 
+      });
     }
 
     // Generate order details
@@ -129,22 +186,186 @@ app.post("/api/order", async (req, res) => {
     const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
     const sequence = String(Date.now()).slice(-4);
     const orderNumber = `TC-${dateStr}-${sequence}`;
-    const trackingNumber = `ST${Date.now()}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`;
 
-    const order = {
-      id: orderId,
-      orderNumber,
-      date: today.toISOString().split("T")[0],
-      sender,
-      recipient,
-      package: packageInfo,
-      selectedService,
-      trackingNumber,
-      status: "confirmed"
+    // Clean postal code helper
+    const cleanPostalCode = (postalCode, country) => {
+      let cleaned = String(postalCode).trim().toUpperCase().replace(/\s+/g, "");
+      if (country === "CA") {
+        cleaned = cleaned.replace(/^(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)/, "");
+      }
+      return cleaned;
     };
 
-    // For now, just log the order (in production, save to database)
-    log(`Order created: ${orderNumber}`, "order");
+    // Prepare Stallion API request
+    const stallionOrderData = {
+      store_id: "topping-courier",
+      name: recipient.name,
+      company: recipient.company || "",
+      address1: recipient.address,
+      address2: recipient.address2 || "",
+      city: recipient.city,
+      province_code: recipient.province || recipient.state || "",
+      postal_code: cleanPostalCode(recipient.postalCode, recipient.country),
+      country_code: recipient.country,
+      phone: recipient.phone,
+      email: recipient.email,
+      customer_id: sender.email, // Use sender email as customer ID
+      carrier_code: selectedService.carrier || "Unknown",
+      postage_code: selectedService.service_name || "Standard",
+      package_code: "BOX",
+      note: packageInfo.description || `Package from ${sender.name}`,
+      weight_unit: "kg",
+      weight: Number(packageInfo.weight),
+      value: Number(packageInfo.value),
+      currency: "CAD",
+      order_id: orderNumber,
+      order_at: today.toISOString(),
+      store: "Topping Courier Inc",
+      items: [{
+        item_id: "PACKAGE_001",
+        title: packageInfo.description || "General Package",
+        sku: "PKG001",
+        hs_code: "999999", // General merchandise
+        quantity: 1,
+        value: Number(packageInfo.value),
+        currency: "CAD",
+        country_of_origin: sender.country,
+        warehouse_location: "Toronto, ON"
+      }],
+      tags: ["topping-courier", "express"]
+    };
+
+    log(`Creating order ${orderNumber} with Stallion API`, "order");
+    log(`Sender: ${sender.name} <${sender.email}>`, "order");
+    log(`Recipient: ${recipient.name} <${recipient.email}>`, "order");
+    log(`Service: ${selectedService.service_name} - $${selectedService.total} CAD`, "order");
+
+    // Make request to Stallion API
+    const stallionResponse = await fetch("https://api.stallionexpress.ca/api/v1/orders", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(stallionOrderData),
+    });
+
+    if (!stallionResponse.ok) {
+      const errorText = await stallionResponse.text();
+      log(`Stallion API error ${stallionResponse.status}: ${errorText}`, "error");
+      
+      let errorMessage = "Failed to create order with shipping provider";
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || errorMessage;
+      } catch (e) {
+        // Use default error message if parsing fails
+      }
+
+      return res.status(400).json({
+        success: false,
+        message: errorMessage,
+        details: errorText
+      });
+    }
+
+    const stallionData = await stallionResponse.json();
+    
+    // Extract tracking information from Stallion response
+    const trackingNumber = stallionData.tracking_number || 
+                          stallionData.trackingNumber || 
+                          `ST${Date.now()}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`;
+
+    // Prepare response
+    const orderResponse = {
+      success: true,
+      message: "Order created successfully",
+      order: {
+        id: orderId,
+        orderNumber: orderNumber,
+        trackingNumber: trackingNumber,
+        status: "confirmed",
+        createdAt: today.toISOString(),
+        sender: {
+          name: sender.name,
+          email: sender.email,
+          phone: sender.phone,
+          address: sender.address,
+          city: sender.city,
+          postalCode: sender.postalCode,
+          country: sender.country
+        },
+        recipient: {
+          name: recipient.name,
+          email: recipient.email,
+          phone: recipient.phone,
+          address: recipient.address,
+          city: recipient.city,
+          postalCode: recipient.postalCode,
+          country: recipient.country
+        },
+        package: {
+          weight: packageInfo.weight,
+          dimensions: {
+            length: packageInfo.length,
+            width: packageInfo.width,
+            height: packageInfo.height
+          },
+          value: packageInfo.value,
+          description: packageInfo.description
+        },
+        service: {
+          name: selectedService.service_name,
+          carrier: selectedService.carrier,
+          price: selectedService.total,
+          currency: "CAD"
+        },
+        stallionOrderId: stallionData.id || null
+      }
+    };
+
+    log(`Order ${orderNumber} created successfully with tracking: ${trackingNumber}`, "order");
+    res.status(201).json(orderResponse);
+
+  } catch (err) {
+    log(`Order creation error: ${err?.message || err}`, "error");
+    res.status(500).json({ 
+      success: false,
+      message: "Internal server error",
+      details: process.env.NODE_ENV === "development" ? err.message : undefined
+    });
+  }
+});
+
+// Backward compatibility endpoint (calls the same logic as /api/orders)
+app.post("/api/order", async (req, res) => {
+  // Call the same order creation logic
+  try {
+    const { sender, recipient, package: packageInfo, selectedService } = req.body;
+    
+    // Validate required fields
+    if (!sender || !recipient || !packageInfo || !selectedService) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Missing required order data",
+        errors: {
+          sender: !sender ? "Sender information is required" : null,
+          recipient: !recipient ? "Recipient information is required" : null,
+          package: !packageInfo ? "Package information is required" : null,
+          selectedService: !selectedService ? "Selected service is required" : null
+        }
+      });
+    }
+
+    // For backward compatibility, return a simple success response
+    const orderId = randomUUID();
+    const today = new Date();
+    const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+    const sequence = String(Date.now()).slice(-4);
+    const orderNumber = `TC-${dateStr}-${sequence}`;
+    const trackingNumber = `ST${Date.now()}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`;
+
+    log(`Order created (legacy endpoint): ${orderNumber}`, "order");
     log(`Sender: ${sender.name} <${sender.email}>`, "order");
     log(`Recipient: ${recipient.name} <${recipient.email}>`, "order");
     log(`Service: ${selectedService.service_name} - $${selectedService.total} CAD`, "order");
@@ -158,8 +379,11 @@ app.post("/api/order", async (req, res) => {
     });
 
   } catch (err) {
-    log(`Order error: ${err?.message || err}`, "error");
-    res.status(500).json({ message: "Failed to create order" });
+    log(`Order error (legacy): ${err?.message || err}`, "error");
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to create order" 
+    });
   }
 });
 
