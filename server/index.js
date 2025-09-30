@@ -465,6 +465,77 @@ app.post("/api/order", async (req, res) => {
   }
 });
 
+// Get order details - singular form for frontend compatibility
+app.get('/api/order/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    log(`Fetching order details for: ${orderId}`, "order");
+    
+    // For now, return a mock order since we don't have persistent storage
+    // In production, this would fetch from database
+    const mockOrder = {
+      id: orderId,
+      orderNumber: `TC-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(Date.now()).slice(-4)}`,
+      trackingNumber: `ST${Date.now()}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`,
+      status: "confirmed",
+      createdAt: new Date().toISOString(),
+      sender: {
+        name: "John Doe",
+        fullName: "John Doe", // Added for frontend compatibility
+        email: "john@example.com",
+        phone: "+1234567890",
+        address: "123 Main St",
+        address1: "123 Main St", // Added for frontend compatibility
+        city: "Toronto",
+        province: "ON", // Added for frontend compatibility
+        postalCode: "M5V 3A8",
+        country: "CA"
+      },
+      recipient: {
+        name: "Jane Smith",
+        fullName: "Jane Smith", // Added for frontend compatibility
+        email: "jane@example.com",
+        phone: "+1987654321",
+        address: "456 Oak Ave",
+        address1: "456 Oak Ave", // Added for frontend compatibility
+        city: "Vancouver",
+        province: "BC", // Added for frontend compatibility
+        postalCode: "V6B 1A1",
+        country: "CA"
+      },
+      package: {
+        weight: 2.5,
+        dimensions: {
+          length: 30,
+          width: 20,
+          height: 15
+        },
+        value: 100,
+        description: "General Package"
+      },
+      service: {
+        name: "ICS Express",
+        carrier: "ICS",
+        price: 55.51,
+        currency: "CAD"
+      }
+    };
+
+    log(`Order details fetched successfully for: ${orderId}`, "order");
+    res.json({
+      success: true,
+      order: mockOrder
+    });
+  } catch (error) {
+    log(`Error fetching order ${req.params.orderId}: ${error?.message || error}`, "error");
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+});
+
 // Serve static files from server/public
 const publicDir = path.resolve(__dirname, "public");
 if (!fs.existsSync(publicDir)) {
