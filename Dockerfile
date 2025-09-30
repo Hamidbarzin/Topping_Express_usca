@@ -5,8 +5,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install all dependencies
-RUN npm ci
+# Install dependencies (avoid npm ci lock issues)
+RUN npm install --production=false
 
 # Copy source code
 COPY . .
@@ -15,7 +15,7 @@ COPY . .
 RUN npm run build
 
 # Remove dev dependencies to reduce image size
-RUN npm prune --omit=dev
+RUN npm prune --production
 
 # Set environment
 ENV NODE_ENV=production
