@@ -577,17 +577,15 @@ app.post("/api/quote", async (req, res) => {
         city: destination.city || "",
         province: destination.province || ""
       },
-      package: {
-        weight: parseFloat(packageInfo.weight) || 1,
-        weight_unit: "lbs",
-        length: parseFloat(packageInfo.dimensions?.length) || 10,
-        width: parseFloat(packageInfo.dimensions?.width) || 10,
-        height: parseFloat(packageInfo.dimensions?.height) || 10,
-        size_unit: "in",
-        value: parseFloat(packageInfo.value) || 0,
-        currency: "CAD",
-        package_contents: packageInfo.description || "General Package"
-      }
+      weight: parseFloat(packageInfo.weight) || 1,
+      weight_unit: "lbs",
+      length: parseFloat(packageInfo.dimensions?.length) || 10,
+      width: parseFloat(packageInfo.dimensions?.width) || 10,
+      height: parseFloat(packageInfo.dimensions?.height) || 10,
+      size_unit: "in",
+      value: parseFloat(packageInfo.value) || 0,
+      currency: "CAD",
+      package_contents: packageInfo.description || "General Package"
     };
 
     log(`Making request to Stallion API: ${JSON.stringify(shippingRequest)}`, "quote");
