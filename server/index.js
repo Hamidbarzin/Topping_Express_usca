@@ -402,6 +402,12 @@ app.get('/api/orders/:orderId', async (req, res) => {
   }
 });
 
+// Backward compatible: GET /api/order/:orderId → same as /api/orders/:orderId
+app.get('/api/order/:orderId', async (req, res) => {
+  req.url = `/api/orders/${req.params.orderId}`;
+  app._router.handle(req, res);
+});
+
 // Backward compatibility endpoint (calls the same logic as /api/orders)
 app.post("/api/order", async (req, res) => {
   // Call the same order creation logic
