@@ -395,10 +395,8 @@ app.get('/api/orders/:orderId', async (req, res) => {
     };
 
     log(`Order details fetched successfully for: ${orderId}`, "order");
-    res.json({
-      success: true,
-      order: mockOrder
-    });
+    // Return order directly for frontend compatibility
+    res.json(mockOrder);
   } catch (error) {
     log(`Error fetching order ${req.params.orderId}: ${error?.message || error}`, "error");
     res.status(500).json({ 
@@ -523,10 +521,8 @@ app.get('/api/order/:orderId', async (req, res) => {
     };
 
     log(`Order details fetched successfully for: ${orderId}`, "order");
-    res.json({
-      success: true,
-      order: mockOrder
-    });
+    // Return order directly for frontend compatibility
+    res.json(mockOrder);
   } catch (error) {
     log(`Error fetching order ${req.params.orderId}: ${error?.message || error}`, "error");
     res.status(500).json({
