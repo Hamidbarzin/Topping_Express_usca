@@ -358,7 +358,9 @@ app.get('/api/orders/:orderId', async (req, res) => {
         email: "john@example.com",
         phone: "+1234567890",
         address: "123 Main St",
+        address1: "123 Main St",  // Frontend expects address1
         city: "Toronto",
+        province: "ON",  // Frontend expects province
         postalCode: "M5V 3A8",
         country: "CA"
       },
@@ -368,7 +370,9 @@ app.get('/api/orders/:orderId', async (req, res) => {
         email: "jane@example.com",
         phone: "+1987654321",
         address: "456 Oak Ave",
+        address1: "456 Oak Ave",  // Frontend expects address1
         city: "Vancouver",
+        province: "BC",  // Frontend expects province
         postalCode: "V6B 1A1",
         country: "CA"
       },
