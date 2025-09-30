@@ -565,22 +565,28 @@ app.post("/api/quote", async (req, res) => {
     const shippingRequest = {
       from_address: {
         country: origin.country,
+        country_code: origin.country,
         postal_code: cleanPostalCode(origin.postalCode, origin.country),
         city: origin.city || "",
         province: origin.province || ""
       },
       to_address: {
         country: destination.country,
+        country_code: destination.country,
         postal_code: cleanPostalCode(destination.postalCode, destination.country),
         city: destination.city || "",
         province: destination.province || ""
       },
       package: {
         weight: parseFloat(packageInfo.weight) || 1,
+        weight_unit: "lbs",
         length: parseFloat(packageInfo.dimensions?.length) || 10,
         width: parseFloat(packageInfo.dimensions?.width) || 10,
         height: parseFloat(packageInfo.dimensions?.height) || 10,
-        value: parseFloat(packageInfo.value) || 0
+        size_unit: "in",
+        value: parseFloat(packageInfo.value) || 0,
+        currency: "CAD",
+        package_contents: packageInfo.description || "General Package"
       }
     };
 
