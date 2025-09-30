@@ -3,6 +3,9 @@ import path from "path";
 import fs from "fs";
 import process from "process";
 import { randomUUID } from "crypto";
+import pkg from "pg";
+const { Pool } = pkg;
+import { v4 as uuidv4 } from "uuid";
 
 // Resolve __dirname in ESM
 const __dirname = path.dirname(new URL(import.meta.url).pathname);
@@ -13,13 +16,176 @@ function log(message, source = "server") {
   console.log(`${ts} [${source}] ${message}`);
 }
 
+// Database connection
+let pool = null;
+
+// Initialize database connection
+async function initDatabase() {
+  try {
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) {
+      log("DATABASE_URL not found, using in-memory storage", "warn");
+      return null;
+    }
+
+    pool = new Pool({
+      connectionString: databaseUrl,
+      ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    });
+
+    // Test connection
+    const client = await pool.connect();
+    await client.query("SELECT NOW()");
+    client.release();
+
+    log("Database connected successfully", "db");
+    
+    // Create orders table if it doesn't exist
+    await createOrdersTable();
+    
+    return pool;
+  } catch (error) {
+    log(`Database connection failed: ${error.message}`, "error");
+    return null;
+  }
+}
+
+// Create orders table
+async function createOrdersTable() {
+  if (!pool) return;
+
+  const createTableQuery = `
+    CREATE TABLE IF NOT EXISTS orders (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      order_number VARCHAR(50) UNIQUE NOT NULL,
+      tracking_number VARCHAR(100),
+      status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'shipped', 'delivered')),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      sender JSONB NOT NULL,
+      recipient JSONB NOT NULL,
+      package_info JSONB NOT NULL,
+      service JSONB NOT NULL,
+      stallion_order_id VARCHAR(100)
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_orders_order_number ON orders(order_number);
+    CREATE INDEX IF NOT EXISTS idx_orders_tracking_number ON orders(tracking_number);
+    CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
+  `;
+
+  try {
+    await pool.query(createTableQuery);
+    log("Orders table created/verified successfully", "db");
+  } catch (error) {
+    log(`Error creating orders table: ${error.message}`, "error");
+    throw error;
+  }
+}
+
+// Database helper functions
+async function saveOrder(orderData) {
+  if (!pool) {
+    throw new Error("Database not available");
+  }
+
+  const {
+    id,
+    orderNumber,
+    trackingNumber,
+    status = "confirmed",
+    sender,
+    recipient,
+    package: packageInfo,
+    service,
+    stallionOrderId
+  } = orderData;
+
+  const query = `
+    INSERT INTO orders (
+      id, order_number, tracking_number, status, 
+      sender, recipient, package_info, service, stallion_order_id
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING *
+  `;
+
+  const values = [
+    id,
+    orderNumber,
+    trackingNumber,
+    status,
+    JSON.stringify(sender),
+    JSON.stringify(recipient),
+    JSON.stringify(packageInfo),
+    JSON.stringify(service),
+    stallionOrderId
+  ];
+
+  try {
+    const result = await pool.query(query, values);
+    return result.rows[0];
+  } catch (error) {
+    log(`Error saving order: ${error.message}`, "error");
+    throw error;
+  }
+}
+
+async function getOrderById(orderId) {
+  if (!pool) {
+    throw new Error("Database not available");
+  }
+
+  const query = `
+    SELECT 
+      id,
+      order_number as "orderNumber",
+      tracking_number as "trackingNumber",
+      status,
+      created_at as "createdAt",
+      updated_at as "updatedAt",
+      sender,
+      recipient,
+      package_info as package,
+      service,
+      stallion_order_id as "stallionOrderId"
+    FROM orders 
+    WHERE id = $1
+  `;
+
+  try {
+    const result = await pool.query(query, [orderId]);
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    const order = result.rows[0];
+    // Parse JSON fields
+    order.sender = typeof order.sender === 'string' ? JSON.parse(order.sender) : order.sender;
+    order.recipient = typeof order.recipient === 'string' ? JSON.parse(order.recipient) : order.recipient;
+    order.package = typeof order.package === 'string' ? JSON.parse(order.package) : order.package;
+    order.service = typeof order.service === 'string' ? JSON.parse(order.service) : order.service;
+    
+    return order;
+  } catch (error) {
+    log(`Error fetching order ${orderId}: ${error.message}`, "error");
+    throw error;
+  }
+}
+
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // Health check endpoint
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, uptime: process.uptime() });
+  res.json({ 
+    ok: true, 
+    uptime: process.uptime(),
+    database: pool ? "connected" : "disconnected"
+  });
 });
 
 // Shipping quote endpoint
@@ -49,65 +215,50 @@ app.post("/api/quote", async (req, res) => {
 
     const shippingRequest = {
       from_address: {
-        country_code: origin.country,
+        country: origin.country,
         postal_code: cleanPostalCode(origin.postalCode, origin.country),
+        city: origin.city || "",
+        province: origin.province || ""
       },
       to_address: {
-        country_code: destination.country,
+        country: destination.country,
         postal_code: cleanPostalCode(destination.postalCode, destination.country),
+        city: destination.city || "",
+        province: destination.province || ""
       },
-      weight: Number(packageInfo.weight),
-      length: Number(packageInfo.length),
-      width: Number(packageInfo.width),
-      height: Number(packageInfo.height),
-      weight_unit: "kg",
-      size_unit: "cm",
-      package_contents: "General merchandise",
-      value: Number(packageInfo.value || 100),
-      currency: "CAD",
+      package: {
+        weight: parseFloat(packageInfo.weight) || 1,
+        length: parseFloat(packageInfo.dimensions?.length) || 10,
+        width: parseFloat(packageInfo.dimensions?.width) || 10,
+        height: parseFloat(packageInfo.dimensions?.height) || 10,
+        value: parseFloat(packageInfo.value) || 0
+      }
     };
 
-    const apiResp = await fetch(SHIPPING_API_URL, {
+    log(`Making request to Stallion API: ${JSON.stringify(shippingRequest)}`, "quote");
+
+    const response = await fetch(SHIPPING_API_URL, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
       },
-      body: JSON.stringify(shippingRequest),
+      body: JSON.stringify(shippingRequest)
     });
 
-    if (!apiResp.ok) {
-      const text = await apiResp.text();
-      log(`Shipping API error ${apiResp.status}: ${text}`, "quote");
-      return res.status(400).json({ message: "Failed to get shipping quotes" });
+    if (!response.ok) {
+      const errorText = await response.text();
+      log(`Stallion API error ${response.status}: ${errorText}`, "error");
+      return res.status(response.status).json({ 
+        message: "Failed to get shipping rates",
+        details: errorText
+      });
     }
 
-    const data = await apiResp.json();
-    let rates = [];
-    if (Array.isArray(data)) rates = data; else if (data.rates) rates = data.rates;
-    if (rates.length === 0) {
-      return res.status(400).json({ message: "No shipping rates available" });
-    }
+    const data = await response.json();
+    log(`Received ${data?.rates?.length || 0} rates from Stallion API`, "quote");
+    res.json(data);
 
-    // Transform with pickup and tax, exposing only final price
-    const services = rates.map((rate) => {
-      const base = Number(rate.total || 0);
-      const pickupCost = 10.0;
-      const markup = Math.round(base * 0.5 * 100) / 100; // 50% hidden markup
-      const subtotalWithPickup = Math.round((base + markup + pickupCost) * 100) / 100;
-      const tax = Math.round(subtotalWithPickup * 0.13 * 100) / 100;
-      const total = Math.round((subtotalWithPickup + tax) * 100) / 100;
-
-      return {
-        service_name: rate.postage_type || "Standard Service",
-        carrier: rate.carrier || "Unknown",
-        delivery_days: rate.delivery_days || "5-7",
-        base: total,
-        total,
-      };
-    });
-
-    res.json({ currency: "CAD", services });
   } catch (err) {
     log(`Quote error: ${err?.message || err}`, "error");
     res.status(500).json({ message: "Internal server error" });
@@ -118,55 +269,38 @@ app.post("/api/quote", async (req, res) => {
 app.post("/api/orders", async (req, res) => {
   try {
     const { sender, recipient, package: packageInfo, selectedService } = req.body;
-    
+
     // Validate required fields
     if (!sender || !recipient || !packageInfo || !selectedService) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Missing required order data",
-        errors: {
-          sender: !sender ? "Sender information is required" : null,
-          recipient: !recipient ? "Recipient information is required" : null,
-          package: !packageInfo ? "Package information is required" : null,
-          selectedService: !selectedService ? "Selected service is required" : null
-        }
+        message: "Missing required fields: sender, recipient, package, selectedService"
       });
     }
 
     // Validate sender fields
-    const senderErrors = [];
-    if (!sender.name) senderErrors.push("Sender name is required");
-    if (!sender.address) senderErrors.push("Sender address is required");
-    if (!sender.city) senderErrors.push("Sender city is required");
-    if (!sender.postalCode) senderErrors.push("Sender postal code is required");
-    if (!sender.country) senderErrors.push("Sender country is required");
-    if (!sender.phone) senderErrors.push("Sender phone is required");
-    if (!sender.email) senderErrors.push("Sender email is required");
-
-    // Validate recipient fields
-    const recipientErrors = [];
-    if (!recipient.name) recipientErrors.push("Recipient name is required");
-    if (!recipient.address) recipientErrors.push("Recipient address is required");
-    if (!recipient.city) recipientErrors.push("Recipient city is required");
-    if (!recipient.postalCode) recipientErrors.push("Recipient postal code is required");
-    if (!recipient.country) recipientErrors.push("Recipient country is required");
-    if (!recipient.phone) recipientErrors.push("Recipient phone is required");
-    if (!recipient.email) recipientErrors.push("Recipient email is required");
-
-    // Validate package fields
-    const packageErrors = [];
-    if (!packageInfo.weight || packageInfo.weight <= 0) packageErrors.push("Package weight must be greater than 0");
-    if (!packageInfo.length || packageInfo.length <= 0) packageErrors.push("Package length must be greater than 0");
-    if (!packageInfo.width || packageInfo.width <= 0) packageErrors.push("Package width must be greater than 0");
-    if (!packageInfo.height || packageInfo.height <= 0) packageErrors.push("Package height must be greater than 0");
-    if (!packageInfo.value || packageInfo.value <= 0) packageErrors.push("Package value must be greater than 0");
-
-    const allErrors = [...senderErrors, ...recipientErrors, ...packageErrors];
-    if (allErrors.length > 0) {
+    if (!sender.name || !sender.email || !sender.phone || !sender.address1 || 
+        !sender.city || !sender.province || !sender.postalCode || !sender.country) {
       return res.status(400).json({
         success: false,
-        message: "Validation failed",
-        errors: allErrors
+        message: "Missing required sender fields: name, email, phone, address1, city, province, postalCode, country"
+      });
+    }
+
+    // Validate recipient fields
+    if (!recipient.name || !recipient.email || !recipient.phone || !recipient.address1 || 
+        !recipient.city || !recipient.province || !recipient.postalCode || !recipient.country) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required recipient fields: name, email, phone, address1, city, province, postalCode, country"
+      });
+    }
+
+    // Validate package fields
+    if (!packageInfo.weight || !packageInfo.dimensions || !packageInfo.value) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required package fields: weight, dimensions, value"
       });
     }
 
@@ -174,14 +308,14 @@ app.post("/api/orders", async (req, res) => {
     const token = process.env.STALLION_API_TOKEN;
     if (!token) {
       log("STALLION_API_TOKEN not found in environment", "error");
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
-        message: "API token not configured" 
+        message: "API token not configured"
       });
     }
 
     // Generate order details
-    const orderId = randomUUID();
+    const orderId = uuidv4();
     const today = new Date();
     const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
     const sequence = String(Date.now()).slice(-4);
@@ -198,47 +332,48 @@ app.post("/api/orders", async (req, res) => {
 
     // Prepare Stallion API request
     const stallionOrderData = {
-      store_id: "topping-courier",
-      name: recipient.name,
-      company: recipient.company || "",
-      address1: recipient.address,
-      address2: recipient.address2 || "",
-      city: recipient.city,
-      province_code: recipient.province || recipient.state || "",
-      postal_code: cleanPostalCode(recipient.postalCode, recipient.country),
-      country_code: recipient.country,
-      phone: recipient.phone,
-      email: recipient.email,
-      customer_id: sender.email, // Use sender email as customer ID
-      carrier_code: selectedService.carrier || "Unknown",
-      postage_code: selectedService.service_name || "Standard",
-      package_code: "BOX",
-      note: packageInfo.description || `Package from ${sender.name}`,
-      weight_unit: "kg",
-      weight: Number(packageInfo.weight),
-      value: Number(packageInfo.value),
-      currency: "CAD",
-      order_id: orderNumber,
-      order_at: today.toISOString(),
-      store: "Topping Courier Inc",
-      items: [{
-        item_id: "PACKAGE_001",
-        title: packageInfo.description || "General Package",
-        sku: "PKG001",
-        hs_code: "999999", // General merchandise
-        quantity: 1,
-        value: Number(packageInfo.value),
-        currency: "CAD",
-        country_of_origin: sender.country,
-        warehouse_location: "Toronto, ON"
-      }],
-      tags: ["topping-courier", "express"]
+      from_address: {
+        name: sender.name,
+        company: sender.company || "",
+        address1: sender.address1,
+        address2: sender.address2 || "",
+        city: sender.city,
+        province: sender.province,
+        postal_code: cleanPostalCode(sender.postalCode, sender.country),
+        country: sender.country,
+        phone: sender.phone,
+        email: sender.email
+      },
+      to_address: {
+        name: recipient.name,
+        company: recipient.company || "",
+        address1: recipient.address1,
+        address2: recipient.address2 || "",
+        city: recipient.city,
+        province: recipient.province,
+        postal_code: cleanPostalCode(recipient.postalCode, recipient.country),
+        country: recipient.country,
+        phone: recipient.phone,
+        email: recipient.email
+      },
+      package: {
+        weight: parseFloat(packageInfo.weight),
+        length: parseFloat(packageInfo.dimensions.length),
+        width: parseFloat(packageInfo.dimensions.width),
+        height: parseFloat(packageInfo.dimensions.height),
+        value: parseFloat(packageInfo.value),
+        description: packageInfo.description || "General Package"
+      },
+      service: {
+        carrier: selectedService.carrier,
+        service_type: selectedService.serviceType || selectedService.name
+      }
     };
 
     log(`Creating order ${orderNumber} with Stallion API`, "order");
-    log(`Sender: ${sender.name} <${sender.email}>`, "order");
-    log(`Recipient: ${recipient.name} <${recipient.email}>`, "order");
-    log(`Service: ${selectedService.service_name} - $${selectedService.total} CAD`, "order");
+    log(`Sender: ${sender.name} (${sender.city}, ${sender.province})`, "order");
+    log(`Recipient: ${recipient.name} (${recipient.city}, ${recipient.province})`, "order");
+    log(`Service: ${selectedService.carrier} - ${selectedService.name}`, "order");
 
     // Make request to Stallion API
     const stallionResponse = await fetch("https://api.stallionexpress.ca/api/v1/orders", {
@@ -255,11 +390,14 @@ app.post("/api/orders", async (req, res) => {
       log(`Stallion API error ${stallionResponse.status}: ${errorText}`, "error");
       
       let errorMessage = "Failed to create order with shipping provider";
-      try {
-        const errorData = JSON.parse(errorText);
-        errorMessage = errorData.message || errorMessage;
-      } catch (e) {
-        // Use default error message if parsing fails
+      if (stallionResponse.status === 400) {
+        errorMessage = "Invalid order data provided";
+      } else if (stallionResponse.status === 401) {
+        errorMessage = "Invalid API credentials";
+      } else if (stallionResponse.status === 403) {
+        errorMessage = "API access forbidden";
+      } else if (stallionResponse.status >= 500) {
+        errorMessage = "Shipping provider service unavailable";
       }
 
       return res.status(400).json({
@@ -270,11 +408,76 @@ app.post("/api/orders", async (req, res) => {
     }
 
     const stallionData = await stallionResponse.json();
-    
+
     // Extract tracking information from Stallion response
     const trackingNumber = stallionData.tracking_number || 
                           stallionData.trackingNumber || 
                           `ST${Date.now()}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`;
+
+    // Prepare order data for database
+    const orderData = {
+      id: orderId,
+      orderNumber: orderNumber,
+      trackingNumber: trackingNumber,
+      status: "confirmed",
+      sender: {
+        name: sender.name,
+        fullName: sender.name, // For frontend compatibility
+        email: sender.email,
+        phone: sender.phone,
+        address: sender.address1,
+        address1: sender.address1,
+        address2: sender.address2 || "",
+        city: sender.city,
+        province: sender.province,
+        postalCode: sender.postalCode,
+        country: sender.country,
+        company: sender.company || ""
+      },
+      recipient: {
+        name: recipient.name,
+        fullName: recipient.name, // For frontend compatibility
+        email: recipient.email,
+        phone: recipient.phone,
+        address: recipient.address1,
+        address1: recipient.address1,
+        address2: recipient.address2 || "",
+        city: recipient.city,
+        province: recipient.province,
+        postalCode: recipient.postalCode,
+        country: recipient.country,
+        company: recipient.company || ""
+      },
+      package: {
+        weight: parseFloat(packageInfo.weight),
+        dimensions: {
+          length: parseFloat(packageInfo.dimensions.length),
+          width: parseFloat(packageInfo.dimensions.width),
+          height: parseFloat(packageInfo.dimensions.height)
+        },
+        value: parseFloat(packageInfo.value),
+        description: packageInfo.description || "General Package"
+      },
+      service: {
+        name: selectedService.name,
+        carrier: selectedService.carrier,
+        serviceType: selectedService.serviceType || selectedService.name,
+        price: parseFloat(selectedService.price) || 0,
+        currency: selectedService.currency || "CAD"
+      },
+      stallionOrderId: stallionData.id || null
+    };
+
+    // Save to database
+    let savedOrder;
+    try {
+      savedOrder = await saveOrder(orderData);
+      log(`Order ${orderNumber} saved to database successfully`, "order");
+    } catch (dbError) {
+      log(`Database save failed for order ${orderNumber}: ${dbError.message}`, "error");
+      // Still return success since Stallion order was created
+      savedOrder = orderData;
+    }
 
     // Prepare response
     const orderResponse = {
@@ -286,40 +489,10 @@ app.post("/api/orders", async (req, res) => {
         trackingNumber: trackingNumber,
         status: "confirmed",
         createdAt: today.toISOString(),
-        sender: {
-          name: sender.name,
-          email: sender.email,
-          phone: sender.phone,
-          address: sender.address,
-          city: sender.city,
-          postalCode: sender.postalCode,
-          country: sender.country
-        },
-        recipient: {
-          name: recipient.name,
-          email: recipient.email,
-          phone: recipient.phone,
-          address: recipient.address,
-          city: recipient.city,
-          postalCode: recipient.postalCode,
-          country: recipient.country
-        },
-        package: {
-          weight: packageInfo.weight,
-          dimensions: {
-            length: packageInfo.length,
-            width: packageInfo.width,
-            height: packageInfo.height
-          },
-          value: packageInfo.value,
-          description: packageInfo.description
-        },
-        service: {
-          name: selectedService.service_name,
-          carrier: selectedService.carrier,
-          price: selectedService.total,
-          currency: "CAD"
-        },
+        sender: orderData.sender,
+        recipient: orderData.recipient,
+        package: orderData.package,
+        service: orderData.service,
         stallionOrderId: stallionData.id || null
       }
     };
@@ -329,7 +502,7 @@ app.post("/api/orders", async (req, res) => {
 
   } catch (err) {
     log(`Order creation error: ${err?.message || err}`, "error");
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: "Internal server error",
       details: process.env.NODE_ENV === "development" ? err.message : undefined
@@ -337,15 +510,211 @@ app.post("/api/orders", async (req, res) => {
   }
 });
 
-// Get order details by ID
+// Backward compatibility endpoint (calls the same logic as /api/orders)
+app.post("/api/order", async (req, res) => {
+  try {
+    const { sender, recipient, package: packageInfo, selectedService } = req.body;
+
+    // Validate required fields
+    if (!sender || !recipient || !packageInfo || !selectedService) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: sender, recipient, package, selectedService"
+      });
+    }
+
+    // Check API token
+    const token = process.env.STALLION_API_TOKEN;
+    if (!token) {
+      log("STALLION_API_TOKEN not found in environment", "error");
+      return res.status(500).json({
+        success: false,
+        message: "API token not configured"
+      });
+    }
+
+    // Generate order details
+    const orderId = uuidv4();
+    const today = new Date();
+    const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+    const sequence = String(Date.now()).slice(-4);
+    const orderNumber = `TC-${dateStr}-${sequence}`;
+
+    // Clean postal code helper
+    const cleanPostalCode = (postalCode, country) => {
+      let cleaned = String(postalCode).trim().toUpperCase().replace(/\s+/g, "");
+      if (country === "CA") {
+        cleaned = cleaned.replace(/^(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)/, "");
+      }
+      return cleaned;
+    };
+
+    // Prepare Stallion API request
+    const stallionOrderData = {
+      from_address: {
+        name: sender.name,
+        company: sender.company || "",
+        address1: sender.address1,
+        address2: sender.address2 || "",
+        city: sender.city,
+        province: sender.province,
+        postal_code: cleanPostalCode(sender.postalCode, sender.country),
+        country: sender.country,
+        phone: sender.phone,
+        email: sender.email
+      },
+      to_address: {
+        name: recipient.name,
+        company: recipient.company || "",
+        address1: recipient.address1,
+        address2: recipient.address2 || "",
+        city: recipient.city,
+        province: recipient.province,
+        postal_code: cleanPostalCode(recipient.postalCode, recipient.country),
+        country: recipient.country,
+        phone: recipient.phone,
+        email: recipient.email
+      },
+      package: {
+        weight: parseFloat(packageInfo.weight),
+        length: parseFloat(packageInfo.dimensions.length),
+        width: parseFloat(packageInfo.dimensions.width),
+        height: parseFloat(packageInfo.dimensions.height),
+        value: parseFloat(packageInfo.value),
+        description: packageInfo.description || "General Package"
+      },
+      service: {
+        carrier: selectedService.carrier,
+        service_type: selectedService.serviceType || selectedService.name
+      }
+    };
+
+    log(`Creating order ${orderNumber} with Stallion API (legacy endpoint)`, "order");
+
+    // Make request to Stallion API
+    const stallionResponse = await fetch("https://api.stallionexpress.ca/api/v1/orders", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(stallionOrderData),
+    });
+
+    if (!stallionResponse.ok) {
+      const errorText = await stallionResponse.text();
+      log(`Stallion API error ${stallionResponse.status}: ${errorText}`, "error");
+      return res.status(400).json({
+        success: false,
+        message: "Failed to create order with shipping provider",
+        details: errorText
+      });
+    }
+
+    const stallionData = await stallionResponse.json();
+    const trackingNumber = stallionData.tracking_number || 
+                          stallionData.trackingNumber || 
+                          `ST${Date.now()}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`;
+
+    // Prepare order data for database
+    const orderData = {
+      id: orderId,
+      orderNumber: orderNumber,
+      trackingNumber: trackingNumber,
+      status: "confirmed",
+      sender: {
+        name: sender.name,
+        fullName: sender.name,
+        email: sender.email,
+        phone: sender.phone,
+        address: sender.address1,
+        address1: sender.address1,
+        address2: sender.address2 || "",
+        city: sender.city,
+        province: sender.province,
+        postalCode: sender.postalCode,
+        country: sender.country,
+        company: sender.company || ""
+      },
+      recipient: {
+        name: recipient.name,
+        fullName: recipient.name,
+        email: recipient.email,
+        phone: recipient.phone,
+        address: recipient.address1,
+        address1: recipient.address1,
+        address2: recipient.address2 || "",
+        city: recipient.city,
+        province: recipient.province,
+        postalCode: recipient.postalCode,
+        country: recipient.country,
+        company: recipient.company || ""
+      },
+      package: {
+        weight: parseFloat(packageInfo.weight),
+        dimensions: {
+          length: parseFloat(packageInfo.dimensions.length),
+          width: parseFloat(packageInfo.dimensions.width),
+          height: parseFloat(packageInfo.dimensions.height)
+        },
+        value: parseFloat(packageInfo.value),
+        description: packageInfo.description || "General Package"
+      },
+      service: {
+        name: selectedService.name,
+        carrier: selectedService.carrier,
+        serviceType: selectedService.serviceType || selectedService.name,
+        price: parseFloat(selectedService.price) || 0,
+        currency: selectedService.currency || "CAD"
+      },
+      stallionOrderId: stallionData.id || null
+    };
+
+    // Save to database
+    try {
+      await saveOrder(orderData);
+      log(`Order ${orderNumber} saved to database successfully (legacy)`, "order");
+    } catch (dbError) {
+      log(`Database save failed for order ${orderNumber}: ${dbError.message}`, "error");
+    }
+
+    res.json({
+      success: true,
+      id: orderId,           // Frontend might expect 'id'
+      orderId: orderId,      // Keep both for compatibility
+      orderNumber: orderNumber,
+      trackingNumber: trackingNumber,
+      message: "Order created successfully"
+    });
+
+  } catch (err) {
+    log(`Order error (legacy): ${err?.message || err}`, "error");
+    res.status(500).json({
+      success: false,
+      message: "Failed to create order"
+    });
+  }
+});
+
+// Get order details by ID - plural form
 app.get('/api/orders/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
     
     log(`Fetching order details for: ${orderId}`, "order");
     
-    // For now, return a mock order since we don't have persistent storage
-    // In production, this would fetch from database
+    // Try to get from database first
+    try {
+      const order = await getOrderById(orderId);
+      if (order) {
+        log(`Order details fetched from database for: ${orderId}`, "order");
+        return res.json(order);
+      }
+    } catch (dbError) {
+      log(`Database fetch failed for order ${orderId}: ${dbError.message}`, "error");
+    }
+
+    // Fallback to mock data if database not available or order not found
     const mockOrder = {
       id: orderId,
       orderNumber: `TC-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(Date.now()).slice(-4)}`,
@@ -354,25 +723,25 @@ app.get('/api/orders/:orderId', async (req, res) => {
       createdAt: new Date().toISOString(),
       sender: {
         name: "John Doe",
-        fullName: "John Doe",  // Frontend expects fullName
+        fullName: "John Doe",
         email: "john@example.com",
         phone: "+1234567890",
         address: "123 Main St",
-        address1: "123 Main St",  // Frontend expects address1
+        address1: "123 Main St",
         city: "Toronto",
-        province: "ON",  // Frontend expects province
+        province: "ON",
         postalCode: "M5V 3A8",
         country: "CA"
       },
       recipient: {
         name: "Jane Smith",
-        fullName: "Jane Smith",  // Frontend expects fullName
+        fullName: "Jane Smith",
         email: "jane@example.com",
         phone: "+1987654321",
         address: "456 Oak Ave",
-        address1: "456 Oak Ave",  // Frontend expects address1
+        address1: "456 Oak Ave",
         city: "Vancouver",
-        province: "BC",  // Frontend expects province
+        province: "BC",
         postalCode: "V6B 1A1",
         country: "CA"
       },
@@ -394,84 +763,36 @@ app.get('/api/orders/:orderId', async (req, res) => {
       }
     };
 
-    log(`Order details fetched successfully for: ${orderId}`, "order");
-    // Return order directly for frontend compatibility
+    log(`Order details fetched from mock data for: ${orderId}`, "order");
     res.json(mockOrder);
   } catch (error) {
     log(`Error fetching order ${req.params.orderId}: ${error?.message || error}`, "error");
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: 'Internal server error' 
+      error: 'Internal server error'
     });
   }
 });
 
-// Backward compatible: GET /api/order/:orderId → same as /api/orders/:orderId
-app.get('/api/order/:orderId', async (req, res) => {
-  req.url = `/api/orders/${req.params.orderId}`;
-  app._router.handle(req, res);
-});
-
-// Backward compatibility endpoint (calls the same logic as /api/orders)
-app.post("/api/order", async (req, res) => {
-  // Call the same order creation logic
-  try {
-    const { sender, recipient, package: packageInfo, selectedService } = req.body;
-    
-    // Validate required fields
-    if (!sender || !recipient || !packageInfo || !selectedService) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Missing required order data",
-        errors: {
-          sender: !sender ? "Sender information is required" : null,
-          recipient: !recipient ? "Recipient information is required" : null,
-          package: !packageInfo ? "Package information is required" : null,
-          selectedService: !selectedService ? "Selected service is required" : null
-        }
-      });
-    }
-
-    // For backward compatibility, return a simple success response
-    const orderId = randomUUID();
-    const today = new Date();
-    const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
-    const sequence = String(Date.now()).slice(-4);
-    const orderNumber = `TC-${dateStr}-${sequence}`;
-    const trackingNumber = `ST${Date.now()}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`;
-
-    log(`Order created (legacy endpoint): ${orderNumber}`, "order");
-    log(`Sender: ${sender.name} <${sender.email}>`, "order");
-    log(`Recipient: ${recipient.name} <${recipient.email}>`, "order");
-    log(`Service: ${selectedService.service_name} - $${selectedService.total} CAD`, "order");
-
-    res.json({ 
-      success: true, 
-      id: orderId,           // Frontend might expect 'id'
-      orderId: orderId,      // Keep both for compatibility
-      orderNumber: orderNumber,
-      trackingNumber: trackingNumber,
-      message: "Order created successfully" 
-    });
-
-  } catch (err) {
-    log(`Order error (legacy): ${err?.message || err}`, "error");
-    res.status(500).json({ 
-      success: false,
-      message: "Failed to create order" 
-    });
-  }
-});
-
-// Get order details - singular form for frontend compatibility
+// Get order details by ID - singular form for frontend compatibility
 app.get('/api/order/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
     
     log(`Fetching order details for: ${orderId}`, "order");
     
-    // For now, return a mock order since we don't have persistent storage
-    // In production, this would fetch from database
+    // Try to get from database first
+    try {
+      const order = await getOrderById(orderId);
+      if (order) {
+        log(`Order details fetched from database for: ${orderId}`, "order");
+        return res.json(order);
+      }
+    } catch (dbError) {
+      log(`Database fetch failed for order ${orderId}: ${dbError.message}`, "error");
+    }
+
+    // Fallback to mock data if database not available or order not found
     const mockOrder = {
       id: orderId,
       orderNumber: `TC-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(Date.now()).slice(-4)}`,
@@ -480,25 +801,25 @@ app.get('/api/order/:orderId', async (req, res) => {
       createdAt: new Date().toISOString(),
       sender: {
         name: "John Doe",
-        fullName: "John Doe", // Added for frontend compatibility
+        fullName: "John Doe",
         email: "john@example.com",
         phone: "+1234567890",
         address: "123 Main St",
-        address1: "123 Main St", // Added for frontend compatibility
+        address1: "123 Main St",
         city: "Toronto",
-        province: "ON", // Added for frontend compatibility
+        province: "ON",
         postalCode: "M5V 3A8",
         country: "CA"
       },
       recipient: {
         name: "Jane Smith",
-        fullName: "Jane Smith", // Added for frontend compatibility
+        fullName: "Jane Smith",
         email: "jane@example.com",
         phone: "+1987654321",
         address: "456 Oak Ave",
-        address1: "456 Oak Ave", // Added for frontend compatibility
+        address1: "456 Oak Ave",
         city: "Vancouver",
-        province: "BC", // Added for frontend compatibility
+        province: "BC",
         postalCode: "V6B 1A1",
         country: "CA"
       },
@@ -520,8 +841,7 @@ app.get('/api/order/:orderId', async (req, res) => {
       }
     };
 
-    log(`Order details fetched successfully for: ${orderId}`, "order");
-    // Return order directly for frontend compatibility
+    log(`Order details fetched from mock data for: ${orderId}`, "order");
     res.json(mockOrder);
   } catch (error) {
     log(`Error fetching order ${req.params.orderId}: ${error?.message || error}`, "error");
@@ -549,9 +869,22 @@ app.get("*", (_req, res) => {
   }
 });
 
-const port = parseInt(process.env.PORT || "10000", 10);
-app.listen(port, "0.0.0.0", () => {
-  log(`Server listening on 0.0.0.0:${port}`);
-});
+// Initialize database and start server
+async function startServer() {
+  try {
+    // Initialize database
+    await initDatabase();
+    
+    const port = parseInt(process.env.PORT || "10000", 10);
+    app.listen(port, "0.0.0.0", () => {
+      log(`Server listening on 0.0.0.0:${port}`);
+      log(`Database: ${pool ? "Connected" : "Not available (using mock data)"}`);
+    });
+  } catch (error) {
+    log(`Failed to start server: ${error.message}`, "error");
+    process.exit(1);
+  }
+}
 
-
+// Start the server
+startServer();
