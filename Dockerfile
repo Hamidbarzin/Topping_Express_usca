@@ -2,26 +2,16 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files
+# Only copy package files to leverage Docker layer caching
 COPY package*.json ./
 
-# Install dependencies (avoid npm ci lock issues)
-RUN npm install --production=false
+# Install only production deps
+RUN npm install --omit=dev
 
-# Copy source code
-COPY . .
+# Copy server code (serves built frontend from server/public)
+COPY server ./server
 
-# Build the application
-RUN npm run build
-
-# Remove dev dependencies to reduce image size
-RUN npm prune --production
-
-# Set environment
 ENV NODE_ENV=production
-
-# Expose port (Render uses PORT env variable)
 EXPOSE 10000
 
-# Start the application
-CMD ["node", "dist/index.js"]
+CMD ["node", "server/index.js"]
