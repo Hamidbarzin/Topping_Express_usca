@@ -1,0 +1,9 @@
+.git
+node_modules
+npm-debug.log
+dist-cpanel
+_cpanel_release
+*.local
+*.env
+.env.*
+client/node_modules
