@@ -337,6 +337,57 @@ app.post("/api/orders", async (req, res) => {
   }
 });
 
+// Get order details by ID
+app.get('/api/orders/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    log(`Fetching order details for: ${orderId}`, "order");
+    
+    // Check API token
+    const token = process.env.STALLION_API_TOKEN;
+    if (!token) {
+      log("STALLION_API_TOKEN not found in environment", "error");
+      return res.status(500).json({ 
+        success: false,
+        error: "API token not configured" 
+      });
+    }
+
+    const response = await fetch(
+      `https://api.stallionexpress.ca/api/v1/orders/${orderId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      log(`Stallion API error ${response.status}: ${JSON.stringify(data)}`, "error");
+      return res.status(response.status).json({ 
+        success: false,
+        error: data.message || 'Failed to fetch order' 
+      });
+    }
+
+    log(`Order details fetched successfully for: ${orderId}`, "order");
+    res.json({
+      success: true,
+      order: data
+    });
+  } catch (error) {
+    log(`Error fetching order ${req.params.orderId}: ${error?.message || error}`, "error");
+    res.status(500).json({ 
+      success: false,
+      error: 'Internal server error' 
+    });
+  }
+});
+
 // Backward compatibility endpoint (calls the same logic as /api/orders)
 app.post("/api/order", async (req, res) => {
   // Call the same order creation logic
