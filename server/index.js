@@ -607,19 +607,40 @@ app.post("/api/quote", async (req, res) => {
     if (!response.ok) {
       const errorText = await response.text();
       log(`Stallion API error ${response.status}: ${errorText}`, "error");
-      return res.status(response.status).json({ 
-        message: "Failed to get shipping rates",
-        details: errorText
+      return res.status(200).json({ 
+        rates: [],
+        error: {
+          message: "Failed to get shipping rates",
+          details: errorText
+        }
       });
     }
 
     const data = await response.json();
     log(`Received ${data?.rates?.length || 0} rates from Stallion API`, "quote");
+    
+    // Ensure rates is always an array
+    if (!data || !Array.isArray(data.rates)) {
+      return res.status(200).json({ 
+        rates: [],
+        error: {
+          message: "No rates available",
+          details: "API returned invalid response"
+        }
+      });
+    }
+    
     res.json(data);
 
   } catch (err) {
     log(`Quote error: ${err?.message || err}`, "error");
-    res.status(500).json({ message: "Internal server error" });
+    res.status(200).json({ 
+      rates: [],
+      error: {
+        message: "Internal server error",
+        details: err?.message || "Unknown error"
+      }
+    });
   }
 });
 
