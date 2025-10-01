@@ -11,7 +11,7 @@ dist/
 build/
 .next/
 out/
-server/public/assets/
+server/public/
 *.tsbuildinfo
 
 # Environment variables
