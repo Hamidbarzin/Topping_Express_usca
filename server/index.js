@@ -548,9 +548,14 @@ app.post("/api/quote", async (req, res) => {
       return res.status(500).json({ message: "API token not configured" });
     }
 
-    const { origin, destination, package: packageInfo } = req.body || {};
+    // Support both formats: {origin, destination, package} and {sender, recipient, packageInfo}
+    const body = req.body || {};
+    const origin = body.origin || body.sender;
+    const destination = body.destination || body.recipient;
+    const packageInfo = body.package || body.packageInfo;
+    
     if (!origin?.country || !origin?.postalCode || !destination?.country || !destination?.postalCode || !packageInfo) {
-      return res.status(400).json({ message: "Missing required fields: origin, destination, package" });
+      return res.status(400).json({ message: "Missing required fields: origin/sender, destination/recipient, package/packageInfo" });
     }
 
     // Clean postal code helper
