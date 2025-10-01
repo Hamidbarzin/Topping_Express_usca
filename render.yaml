@@ -1,0 +1,33 @@
+services:
+  # Web Service
+  - type: web
+    name: topping-express
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: POSTMARK_API_KEY
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SHIPPING_API_KEY
+        sync: false
+
+  # PostgreSQL Database (optional)
+  # - type: pserv
+  #   name: topping-express-db
+  #   env: docker
+  #   plan: free
+  #   region: oregon
+  #   ipAllowList: []
