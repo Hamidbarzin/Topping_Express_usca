@@ -60,6 +60,16 @@ async function initDatabase() {
 async function createOrdersTable() {
   if (!pool) return;
 
+  try {
+    // Enable pgcrypto extension for gen_random_uuid() on older PostgreSQL versions
+    // (PostgreSQL 13+ has gen_random_uuid() built-in without needing this)
+    await pool.query('CREATE EXTENSION IF NOT EXISTS "pgcrypto"');
+    log("PostgreSQL extensions verified", "db");
+  } catch (error) {
+    // Ignore error if extension already exists or if using PostgreSQL 13+
+    log(`Extension check: ${error.message}`, "info");
+  }
+
   const createTableQuery = `
     CREATE TABLE IF NOT EXISTS orders (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -199,9 +209,14 @@ function initEmailService() {
   }
 }
 
+// Get app URL for emails
+function getAppUrl() {
+  return process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || "https://topping-express-usca.onrender.com";
+}
+
 // Email templates
-function createCustomerEmailTemplate(order) {
-  const trackingUrl = `https://topping-express-usca.onrender.com/track?number=${order.trackingNumber}`;
+function createCustomerEmailTemplate(order, appUrl = getAppUrl()) {
+  const trackingUrl = `${appUrl}/track?number=${order.trackingNumber}`;
   const estimatedDelivery = new Date();
   estimatedDelivery.setDate(estimatedDelivery.getDate() + 3); // 3 days from now
 
@@ -330,7 +345,7 @@ function createCustomerEmailTemplate(order) {
                 <p>
                     <strong>Email:</strong> <a href="mailto:support@toppingcourier.ca">support@toppingcourier.ca</a><br>
                     <strong>Phone:</strong> <a href="tel:+1-800-TOPPING">1-800-TOPPING</a><br>
-                    <strong>Website:</strong> <a href="https://topping-express-usca.onrender.com">topping-express-usca.onrender.com</a>
+                    <strong>Website:</strong> <a href="${appUrl}">${appUrl.replace(/^https?:\/\//, '')}</a>
                 </p>
             </div>
         </div>
@@ -345,7 +360,7 @@ function createCustomerEmailTemplate(order) {
   `;
 }
 
-function createAdminEmailTemplate(order) {
+function createAdminEmailTemplate(order, appUrl = getAppUrl()) {
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -464,9 +479,9 @@ function createAdminEmailTemplate(order) {
             <div style="margin-top: 30px; padding: 20px; background: #e3f2fd; border-radius: 6px;">
                 <h3>🔗 Quick Actions</h3>
                 <p>
-                    <strong>Track Package:</strong> <a href="https://topping-express-usca.onrender.com/track?number=${order.trackingNumber}">View Tracking</a><br>
+                    <strong>Track Package:</strong> <a href="${appUrl}/track?number=${order.trackingNumber}">View Tracking</a><br>
                     <strong>Stallion Dashboard:</strong> <a href="https://dashboard.stallionexpress.ca">Open Dashboard</a><br>
-                    <strong>Order Management:</strong> <a href="https://topping-express-usca.onrender.com/admin/orders">View All Orders</a>
+                    <strong>Order Management:</strong> <a href="${appUrl}/admin/orders">View All Orders</a>
                 </p>
             </div>
         </div>
