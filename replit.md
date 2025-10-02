@@ -4,11 +4,14 @@
 A full-stack shipping quote and order management system for Canada-to-USA shipments. Built with React, TypeScript, Vite (frontend) and Express, Node.js (backend).
 
 ## Recent Changes
-- **2025-10-02**: Configured for Replit environment
+- **2025-10-02**: Configured for Replit and Render deployment
   - Updated Vite config to bind to 0.0.0.0:5000 with HMR over WSS
+  - Added `allowedHosts: true` to Vite config for Replit proxy compatibility
   - Configured backend server to run on localhost:3000
   - Set up concurrent development servers (frontend + backend)
-  - Configured deployment for autoscale with build step
+  - Fixed build script to use `npx vite build` for reliable production builds
+  - Updated render.yaml to install devDependencies during build phase
+  - Configured deployment for autoscale with proper build configuration
 
 ## Project Architecture
 
