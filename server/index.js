@@ -1327,12 +1327,12 @@ async function startServer() {
     initEmailService();
     
     const port = parseInt(process.env.PORT || "3000", 10);
-    const host = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
+    const host = process.env.HOST || (process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost");
     
     app.listen(port, host, () => {
-      log(`Server listening on ${host}:${port}`);
-      log(`Database: ${pool ? "Connected" : "Not available (using mock data)"}`);
-      log(`Email Service: ${postmarkClient ? "Connected" : "Not available (emails disabled)"}`);
+      log(`🚀 Server listening on ${host}:${port} (${process.env.NODE_ENV || 'development'} mode)`);
+      log(`📊 Database: ${pool ? "Connected ✓" : "Not available (using mock data)"}`);
+      log(`📧 Email Service: ${postmarkClient ? "Connected ✓" : "Not available (emails disabled)"}`);
     });
   } catch (error) {
     log(`Failed to start server: ${error.message}`, "error");

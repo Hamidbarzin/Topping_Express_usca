@@ -1,12 +1,12 @@
 services:
-  # Web Service
   - type: web
-    name: topping-express
-    env: node
+    name: topping-express-usca
+    runtime: docker
     region: oregon
     plan: free
-    buildCommand: npm install --include=dev && npm run build
-    startCommand: npm start
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
@@ -23,3 +23,4 @@ services:
         value: toppingcourier.ca@gmail.com
       - key: SESSION_SECRET
         generateValue: true
+    autoDeploy: true
