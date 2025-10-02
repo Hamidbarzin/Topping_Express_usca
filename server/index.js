@@ -1276,8 +1276,10 @@ async function startServer() {
     initEmailService();
     
     const port = parseInt(process.env.PORT || "3000", 10);
-    app.listen(port, "localhost", () => {
-      log(`Server listening on localhost:${port}`);
+    const host = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
+    
+    app.listen(port, host, () => {
+      log(`Server listening on ${host}:${port}`);
       log(`Database: ${pool ? "Connected" : "Not available (using mock data)"}`);
       log(`Email Service: ${postmarkClient ? "Connected" : "Not available (emails disabled)"}`);
     });
