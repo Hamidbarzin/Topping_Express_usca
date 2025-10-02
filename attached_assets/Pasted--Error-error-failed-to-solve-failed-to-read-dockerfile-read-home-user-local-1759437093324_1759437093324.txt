@@ -1,0 +1,146 @@
+پیدا کردم! 🎯 Error دقیق:
+error: failed to solve: failed to read dockerfile: 
+read /home/user/.local/tmp/buildkit-mount522133918/src: is a directory
+این error معمولاً از .dockerignore یا مشکل در COPY commands میاد!
+بذار چک کنیم:Analyzed dataView analysisjavascript// چک کردن فایل‌های مهم
+const files = ['.dockerignore', 'package.json', '.gitignore'];
+const results = {};
+
+for (const file of files) {
+  try {
+    const content = await window.fs.readFile(file, { encoding: 'utf8' });
+    results[file] = content;
+    console.log(`\n=== ${file} ===`);
+    console.log(content);
+  } catch (err) {
+    console.log(`\n=== ${file} ===`);
+    console.log('❌ File not found');
+  }
+}
+OutputResult
+
+ErrorError
+
+File not found: No file named ".dockerignore"Investigated Docker file issue and potential directory problem.خب فایل‌ها رو پیدا نکرد. ولی من از روی error میتونم تشخیص بدم که مشکل چیه.
+Error میگه: "is a directory" - این یعنی Docker داره سعی میکنه یه directory رو به عنوان file بخونه.
+احتمالاً مشکل از این بخش میاد:
+dockerfileCOPY . .
+یا اینکه یه .dockerignore غلط داریم که src/ رو ignore کرده.
+بذار یه چیزایی چک کنم:
+
+ساختار پروژه رو بررسی کنم
+ببینم src/ کجاست
+یه .dockerignore درست بسازیم
+🔥 پیدا کردم! مشکل از Build Context هستش
+از error message معلومه که Docker نمیتونه directory src رو بخونه. این معمولاً به این دلایل میشه:
+
+🛠️ راه حل‌ها:
+✅ راه حل 1: ایجاد .dockerignore صحیح
+یه فایل .dockerignore بساز با این محتوا:
+dockerignore# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Build (DON'T ignore server/public - we need it from builder!)
+dist/
+coverage/
+
+# Misc
+*.log
+.DS_Store
+⚠️ نکته مهم: server/public/ رو ignore نکن چون از builder stage کپی میشه!
+
+✅ راه حل 2: Dockerfile رو بازنویسی کن (بهتر)
+این ساختار بهتره:
+dockerfile# Build stage
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files first (for better caching)
+COPY package*.json ./
+
+# Install ALL dependencies
+RUN npm ci
+
+# Copy source code in specific order
+COPY client ./client
+COPY server ./server
+COPY shared ./shared
+COPY tsconfig.json vite.config.ts ./
+
+# Build frontend
+RUN npm run build
+
+# Production stage
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install production dependencies only
+RUN npm ci --omit=dev
+
+# Copy shared schema
+COPY shared ./shared
+
+# Copy server source
+COPY server/index.js ./server/
+
+# Copy built static files from builder
+COPY --from=builder /app/server/public ./server/public
+
+# Expose port
+EXPOSE 10000
+
+ENV NODE_ENV=production
+
+CMD ["node", "server/index.js"]
+
+✅ راه حل 3: اگه Replit مشکل داره
+شاید Replit build context رو اشتباه ست کرده. چک کن که:
+
+Root directory صحیح باشه:
+
+json   // replit.nix یا .replit
+   {
+     "run": "npm start",
+     "language": "nodejs"
+   }
+
+Build command درست باشه:
+
+باید از root پروژه run بشه
+نه از subfolder
+
+
+
+
+🚀 تست کن:
+الان این کارو بکن:
+
+فایل .dockerignore رو بساز (راه حل 1)
+یا Dockerfile رو عوض کن (راه حل 2)
+Commit و Push کن:
+
+bash   git add .
+   git commit -m "Fix Docker build context issue"
+   git push
+کدوم راه حل رو امتحان کنیم؟ 🎯HZye super prompt bedeh va index html ro render nemitooneh bekhon yek dibug add besheh ke sarie moshkel ro befahmimCrafted comprehensive debugging strategy for unrendered HTML file.

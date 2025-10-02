@@ -1266,8 +1266,44 @@ app.get('/api/order/:orderId', async (req, res) => {
 
 // Serve static files from server/public
 const publicDir = path.resolve(__dirname, "public");
+log(`🔍 PUBLIC DIR PATH: ${publicDir}`, "debug");
+log(`🔍 __dirname: ${__dirname}`, "debug");
+log(`🔍 Current working directory: ${process.cwd()}`, "debug");
+
 if (!fs.existsSync(publicDir)) {
-  log(`Public directory not found at ${publicDir}`, "warn");
+  log(`❌ Public directory NOT FOUND at ${publicDir}`, "error");
+  log(`📁 Available directories in ${__dirname}:`, "debug");
+  try {
+    const files = fs.readdirSync(__dirname);
+    files.forEach(file => {
+      const fullPath = path.join(__dirname, file);
+      const stats = fs.statSync(fullPath);
+      log(`  - ${file} ${stats.isDirectory() ? '[DIR]' : '[FILE]'}`, "debug");
+    });
+  } catch (err) {
+    log(`Error reading directory: ${err.message}`, "error");
+  }
+} else {
+  log(`✅ Public directory found at ${publicDir}`, "startup");
+  try {
+    const files = fs.readdirSync(publicDir);
+    log(`📁 Files in public directory (${files.length} items):`, "startup");
+    files.forEach(file => {
+      const fullPath = path.join(publicDir, file);
+      const stats = fs.statSync(fullPath);
+      log(`  - ${file} ${stats.isDirectory() ? '[DIR]' : '[FILE]'} (${stats.size} bytes)`, "startup");
+    });
+    
+    const indexPath = path.join(publicDir, "index.html");
+    if (fs.existsSync(indexPath)) {
+      const indexStats = fs.statSync(indexPath);
+      log(`✅ index.html found! (${indexStats.size} bytes)`, "startup");
+    } else {
+      log(`❌ index.html NOT FOUND in public directory!`, "error");
+    }
+  } catch (err) {
+    log(`Error reading public directory: ${err.message}`, "error");
+  }
 }
 app.use(express.static(publicDir));
 
