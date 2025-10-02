@@ -6,13 +6,13 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install ALL dependencies (including dev)
-RUN npm install
+# Install ALL dependencies (including devDependencies for build)
+RUN npm ci
 
-# Copy source code
+# Copy all source code
 COPY . .
 
-# Build frontend
+# Build the frontend (outputs to server/public/)
 RUN npm run build
 
 # Production stage
@@ -24,15 +24,22 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install only production dependencies
-RUN npm install --production
+RUN npm ci --omit=dev
 
-# Copy server code and built frontend
-COPY --from=builder /app/server/public ./server/public
-COPY --from=builder /app/server/index.js ./server/index.js
-COPY --from=builder /app/shared ./shared
+# Copy server code from source
+COPY server server
+
+# Copy shared code from source
+COPY shared shared
+
+# Copy built frontend from builder stage
+COPY --from=builder /app/server/public server/public
 
 # Expose port
 EXPOSE 10000
 
-# Start server
+# Set environment to production
+ENV NODE_ENV=production
+
+# Start the server
 CMD ["npm", "start"]
