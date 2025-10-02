@@ -26,8 +26,9 @@ COPY package*.json ./
 # Install only production dependencies
 RUN npm install --production
 
-# Copy built files and server code
-COPY --from=builder /app/server ./server
+# Copy server code and built frontend
+COPY --from=builder /app/server/public ./server/public
+COPY --from=builder /app/server/index.js ./server/index.js
 COPY --from=builder /app/shared ./shared
 
 # Expose port
