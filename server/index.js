@@ -9,7 +9,9 @@ import { v4 as uuidv4 } from "uuid";
 import postmark from "postmark";
 
 // Resolve __dirname in ESM
-const __dirname = path.dirname(new URL(import.meta.url).pathname);
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Simple logger
 function log(message, source = "server") {
