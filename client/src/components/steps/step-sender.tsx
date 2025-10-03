@@ -9,20 +9,78 @@ interface StepSenderProps {
   form: UseFormReturn<any>;
 }
 
+const COUNTRIES = [
+  { code: "CA", name: "Canada" },
+  { code: "US", name: "United States" },
+];
+
 const CANADIAN_PROVINCES = [
-  { code: "ON", name: "Ontario" },
-  { code: "BC", name: "British Columbia" },
-  { code: "QC", name: "Quebec" },
   { code: "AB", name: "Alberta" },
+  { code: "BC", name: "British Columbia" },
   { code: "MB", name: "Manitoba" },
-  { code: "NS", name: "Nova Scotia" },
   { code: "NB", name: "New Brunswick" },
   { code: "NL", name: "Newfoundland and Labrador" },
+  { code: "NT", name: "Northwest Territories" },
+  { code: "NS", name: "Nova Scotia" },
+  { code: "NU", name: "Nunavut" },
+  { code: "ON", name: "Ontario" },
   { code: "PE", name: "Prince Edward Island" },
+  { code: "QC", name: "Quebec" },
   { code: "SK", name: "Saskatchewan" },
   { code: "YT", name: "Yukon" },
-  { code: "NT", name: "Northwest Territories" },
-  { code: "NU", name: "Nunavut" },
+];
+
+const US_STATES = [
+  { code: "AL", name: "Alabama" },
+  { code: "AK", name: "Alaska" },
+  { code: "AZ", name: "Arizona" },
+  { code: "AR", name: "Arkansas" },
+  { code: "CA", name: "California" },
+  { code: "CO", name: "Colorado" },
+  { code: "CT", name: "Connecticut" },
+  { code: "DE", name: "Delaware" },
+  { code: "FL", name: "Florida" },
+  { code: "GA", name: "Georgia" },
+  { code: "HI", name: "Hawaii" },
+  { code: "ID", name: "Idaho" },
+  { code: "IL", name: "Illinois" },
+  { code: "IN", name: "Indiana" },
+  { code: "IA", name: "Iowa" },
+  { code: "KS", name: "Kansas" },
+  { code: "KY", name: "Kentucky" },
+  { code: "LA", name: "Louisiana" },
+  { code: "ME", name: "Maine" },
+  { code: "MD", name: "Maryland" },
+  { code: "MA", name: "Massachusetts" },
+  { code: "MI", name: "Michigan" },
+  { code: "MN", name: "Minnesota" },
+  { code: "MS", name: "Mississippi" },
+  { code: "MO", name: "Missouri" },
+  { code: "MT", name: "Montana" },
+  { code: "NE", name: "Nebraska" },
+  { code: "NV", name: "Nevada" },
+  { code: "NH", name: "New Hampshire" },
+  { code: "NJ", name: "New Jersey" },
+  { code: "NM", name: "New Mexico" },
+  { code: "NY", name: "New York" },
+  { code: "NC", name: "North Carolina" },
+  { code: "ND", name: "North Dakota" },
+  { code: "OH", name: "Ohio" },
+  { code: "OK", name: "Oklahoma" },
+  { code: "OR", name: "Oregon" },
+  { code: "PA", name: "Pennsylvania" },
+  { code: "RI", name: "Rhode Island" },
+  { code: "SC", name: "South Carolina" },
+  { code: "SD", name: "South Dakota" },
+  { code: "TN", name: "Tennessee" },
+  { code: "TX", name: "Texas" },
+  { code: "UT", name: "Utah" },
+  { code: "VT", name: "Vermont" },
+  { code: "VA", name: "Virginia" },
+  { code: "WA", name: "Washington" },
+  { code: "WV", name: "West Virginia" },
+  { code: "WI", name: "Wisconsin" },
+  { code: "WY", name: "Wyoming" },
 ];
 
 export default function StepSender({ form }: StepSenderProps) {
@@ -34,10 +92,16 @@ export default function StepSender({ form }: StepSenderProps) {
     return emailRegex.test(email);
   };
 
-  const validatePostalCode = (postalCode: string): boolean => {
-    // Canadian postal code format: A1A 1A1
-    const postalCodeRegex = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
-    return postalCodeRegex.test(postalCode);
+  const validatePostalCode = (postalCode: string, country: string): boolean => {
+    if (country === "CA") {
+      // Canadian postal code: A1A 1A1 or A1A1A1
+      const canadaRegex = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
+      return canadaRegex.test(postalCode);
+    } else {
+      // US ZIP code: 12345 or 12345-6789
+      const usRegex = /^\d{5}(-\d{4})?$/;
+      return usRegex.test(postalCode);
+    }
   };
 
   const validatePhone = (phone: string): boolean => {
@@ -71,8 +135,13 @@ export default function StepSender({ form }: StepSenderProps) {
         }
         break;
       case "postalCode":
-        if (value && !validatePostalCode(value)) {
-          error = "Please enter a valid Canadian postal code (e.g., A1A 1A1)";
+        const country = form.getValues("sender.country");
+        if (value && !validatePostalCode(value, country)) {
+          if (country === "CA") {
+            error = "Please enter a valid Canadian postal code (e.g., A1A 1A1)";
+          } else {
+            error = "Please enter a valid US ZIP code (e.g., 12345 or 12345-6789)";
+          }
         }
         break;
       case "phone":
@@ -88,6 +157,11 @@ export default function StepSender({ form }: StepSenderProps) {
   };
 
   const senderData = form.watch("sender") || {};
+  const selectedCountry = senderData.country || "CA";
+  const stateProvinceList = selectedCountry === "CA" ? CANADIAN_PROVINCES : US_STATES;
+  const stateProvinceLabel = selectedCountry === "CA" ? "Province" : "State";
+  const postalCodeLabel = selectedCountry === "CA" ? "Postal Code" : "ZIP Code";
+  const postalCodePlaceholder = selectedCountry === "CA" ? "A1A 1A1" : "12345";
 
   return (
     <div className="space-y-6">
@@ -224,10 +298,33 @@ export default function StepSender({ form }: StepSenderProps) {
           )}
         </div>
 
-        {/* Province */}
+        {/* Country */}
+        <div className="space-y-2">
+          <Label htmlFor="sender-country" className="text-sm font-medium">
+            Country <span className="text-red-500">*</span>
+          </Label>
+          <select
+            id="sender-country"
+            value={selectedCountry}
+            onChange={(e) => {
+              handleFieldChange("country", e.target.value);
+              handleFieldChange("province", "");
+            }}
+            required
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            {COUNTRIES.map((country) => (
+              <option key={country.code} value={country.code}>
+                {country.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* State/Province */}
         <div className="space-y-2">
           <Label htmlFor="sender-province" className="text-sm font-medium">
-            Province <span className="text-red-500">*</span>
+            {stateProvinceLabel} <span className="text-red-500">*</span>
           </Label>
           <select
             id="sender-province"
@@ -238,10 +335,10 @@ export default function StepSender({ form }: StepSenderProps) {
               errors.province ? "border-red-500" : ""
             }`}
           >
-            <option value="">Select a province</option>
-            {CANADIAN_PROVINCES.map((province) => (
-              <option key={province.code} value={province.code}>
-                {province.name} ({province.code})
+            <option value="">Select a {stateProvinceLabel.toLowerCase()}</option>
+            {stateProvinceList.map((item) => (
+              <option key={item.code} value={item.code}>
+                {item.name} ({item.code})
               </option>
             ))}
           </select>
@@ -250,40 +347,25 @@ export default function StepSender({ form }: StepSenderProps) {
           )}
         </div>
 
-        {/* Postal Code */}
+        {/* Postal Code / ZIP Code */}
         <div className="space-y-2">
           <Label htmlFor="sender-postalCode" className="text-sm font-medium">
-            Postal Code <span className="text-red-500">*</span>
+            {postalCodeLabel} <span className="text-red-500">*</span>
           </Label>
           <Input
             id="sender-postalCode"
             type="text"
-            placeholder="A1A 1A1"
+            placeholder={postalCodePlaceholder}
             value={senderData.postalCode || ""}
             onChange={(e) => handleFieldChange("postalCode", e.target.value.toUpperCase())}
             onBlur={() => handleBlur("postalCode")}
             required
-            maxLength={7}
+            maxLength={10}
             className={errors.postalCode ? "border-red-500" : ""}
           />
           {errors.postalCode && (
             <p className="text-sm text-red-500">{errors.postalCode}</p>
           )}
-        </div>
-
-        {/* Country */}
-        <div className="space-y-2">
-          <Label htmlFor="sender-country" className="text-sm font-medium">
-            Country <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="sender-country"
-            type="text"
-            value="Canada"
-            disabled
-            className="bg-gray-50"
-          />
-          <input type="hidden" value="CA" {...form.register("sender.country")} />
         </div>
       </div>
     </div>

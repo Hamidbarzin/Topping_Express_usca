@@ -11,6 +11,27 @@ interface StepRecipientProps {
   copyFromSender: () => void;
 }
 
+const COUNTRIES = [
+  { code: "CA", name: "Canada" },
+  { code: "US", name: "United States" },
+];
+
+const CANADIAN_PROVINCES = [
+  { code: "AB", name: "Alberta" },
+  { code: "BC", name: "British Columbia" },
+  { code: "MB", name: "Manitoba" },
+  { code: "NB", name: "New Brunswick" },
+  { code: "NL", name: "Newfoundland and Labrador" },
+  { code: "NT", name: "Northwest Territories" },
+  { code: "NS", name: "Nova Scotia" },
+  { code: "NU", name: "Nunavut" },
+  { code: "ON", name: "Ontario" },
+  { code: "PE", name: "Prince Edward Island" },
+  { code: "QC", name: "Quebec" },
+  { code: "SK", name: "Saskatchewan" },
+  { code: "YT", name: "Yukon" },
+];
+
 const US_STATES = [
   { code: "AL", name: "Alabama" },
   { code: "AK", name: "Alaska" },
@@ -72,10 +93,16 @@ export default function StepRecipient({ form, copyFromSender }: StepRecipientPro
     return emailRegex.test(email);
   };
 
-  const validateZipCode = (zipCode: string): boolean => {
-    // US ZIP code: 12345 or 12345-6789
-    const zipRegex = /^\d{5}(-\d{4})?$/;
-    return zipRegex.test(zipCode);
+  const validatePostalCode = (postalCode: string, country: string): boolean => {
+    if (country === "CA") {
+      // Canadian postal code: A1A 1A1 or A1A1A1
+      const canadaRegex = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
+      return canadaRegex.test(postalCode);
+    } else {
+      // US ZIP code: 12345 or 12345-6789
+      const usRegex = /^\d{5}(-\d{4})?$/;
+      return usRegex.test(postalCode);
+    }
   };
 
   const validatePhone = (phone: string): boolean => {
@@ -107,8 +134,13 @@ export default function StepRecipient({ form, copyFromSender }: StepRecipientPro
         }
         break;
       case "postalCode":
-        if (value && !validateZipCode(value)) {
-          error = "Please enter a valid US ZIP code (e.g., 12345 or 12345-6789)";
+        const country = form.getValues("recipient.country");
+        if (value && !validatePostalCode(value, country)) {
+          if (country === "CA") {
+            error = "Please enter a valid Canadian postal code (e.g., A1A 1A1)";
+          } else {
+            error = "Please enter a valid US ZIP code (e.g., 12345 or 12345-6789)";
+          }
         }
         break;
       case "phone":
@@ -124,6 +156,11 @@ export default function StepRecipient({ form, copyFromSender }: StepRecipientPro
   };
 
   const recipientData = form.watch("recipient") || {};
+  const selectedCountry = recipientData.country || "US";
+  const stateProvinceList = selectedCountry === "CA" ? CANADIAN_PROVINCES : US_STATES;
+  const stateProvinceLabel = selectedCountry === "CA" ? "Province" : "State";
+  const postalCodeLabel = selectedCountry === "CA" ? "Postal Code" : "ZIP Code";
+  const postalCodePlaceholder = selectedCountry === "CA" ? "A1A 1A1" : "12345";
 
   return (
     <div className="space-y-6">
@@ -273,10 +310,34 @@ export default function StepRecipient({ form, copyFromSender }: StepRecipientPro
           )}
         </div>
 
-        {/* State */}
+        {/* Country */}
+        <div className="space-y-2">
+          <Label htmlFor="recipient-country" className="text-sm font-medium">
+            Country <span className="text-red-500">*</span>
+          </Label>
+          <select
+            id="recipient-country"
+            value={selectedCountry}
+            onChange={(e) => {
+              handleFieldChange("country", e.target.value);
+              // Reset province when country changes
+              handleFieldChange("province", "");
+            }}
+            required
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            {COUNTRIES.map((country) => (
+              <option key={country.code} value={country.code}>
+                {country.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* State/Province */}
         <div className="space-y-2">
           <Label htmlFor="recipient-province" className="text-sm font-medium">
-            State <span className="text-red-500">*</span>
+            {stateProvinceLabel} <span className="text-red-500">*</span>
           </Label>
           <select
             id="recipient-province"
@@ -287,10 +348,10 @@ export default function StepRecipient({ form, copyFromSender }: StepRecipientPro
               errors.province ? "border-red-500" : ""
             }`}
           >
-            <option value="">Select a state</option>
-            {US_STATES.map((state) => (
-              <option key={state.code} value={state.code}>
-                {state.name} ({state.code})
+            <option value="">Select a {stateProvinceLabel.toLowerCase()}</option>
+            {stateProvinceList.map((item) => (
+              <option key={item.code} value={item.code}>
+                {item.name} ({item.code})
               </option>
             ))}
           </select>
@@ -299,17 +360,17 @@ export default function StepRecipient({ form, copyFromSender }: StepRecipientPro
           )}
         </div>
 
-        {/* ZIP Code */}
+        {/* Postal Code / ZIP Code */}
         <div className="space-y-2">
           <Label htmlFor="recipient-postalCode" className="text-sm font-medium">
-            ZIP Code <span className="text-red-500">*</span>
+            {postalCodeLabel} <span className="text-red-500">*</span>
           </Label>
           <Input
             id="recipient-postalCode"
             type="text"
-            placeholder="12345"
+            placeholder={postalCodePlaceholder}
             value={recipientData.postalCode || ""}
-            onChange={(e) => handleFieldChange("postalCode", e.target.value)}
+            onChange={(e) => handleFieldChange("postalCode", e.target.value.toUpperCase())}
             onBlur={() => handleBlur("postalCode")}
             required
             maxLength={10}
@@ -318,21 +379,6 @@ export default function StepRecipient({ form, copyFromSender }: StepRecipientPro
           {errors.postalCode && (
             <p className="text-sm text-red-500">{errors.postalCode}</p>
           )}
-        </div>
-
-        {/* Country */}
-        <div className="space-y-2">
-          <Label htmlFor="recipient-country" className="text-sm font-medium">
-            Country <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="recipient-country"
-            type="text"
-            value="United States"
-            disabled
-            className="bg-gray-50"
-          />
-          <input type="hidden" value="US" {...form.register("recipient.country")} />
         </div>
       </div>
     </div>
