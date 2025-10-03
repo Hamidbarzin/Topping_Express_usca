@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Topping Courier - Shipping Quote</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                borderRadius: {
+                    lg: "var(--radius)",
+                    md: "calc(var(--radius) - 2px)",
+                    sm: "calc(var(--radius) - 4px)",
+                },
+                colors: {
+                    background: "var(--background)",
+                    foreground: "var(--foreground)",
+                    card: {
+                        DEFAULT: "var(--card)",
+                        foreground: "var(--card-foreground)",
+                    },
+                    primary: {
+                        DEFAULT: "var(--primary)",
+                        foreground: "var(--primary-foreground)",
+                    },
+                    secondary: {
+                        DEFAULT: "var(--secondary)",
+                        foreground: "var(--secondary-foreground)",
+                    },
+                    muted: {
+                        DEFAULT: "var(--muted)",
+                        foreground: "var(--muted-foreground)",
+                    },
+                    accent: {
+                        DEFAULT: "var(--accent)",
+                        foreground: "var(--accent-foreground)",
+                    },
+                    border: "var(--border)",
+                    input: "var(--input)",
+                    ring: "var(--ring)",
+                }
+            },
+        }
+    };
+    </script>
+    <style>
+        :root {
+            --background: hsl(210 40% 98%);
+            --foreground: hsl(222.2 84% 4.9%);
+            --card: hsl(0 0% 100%);
+            --card-foreground: hsl(222.2 84% 4.9%);
+            --primary: hsl(221.2 83.2% 53.3%);
+            --primary-foreground: hsl(210 40% 98%);
+            --secondary: hsl(210 40% 96%);
+            --secondary-foreground: hsl(222.2 84% 4.9%);
+            --muted: hsl(210 40% 96%);
+            --muted-foreground: hsl(215.4 16.3% 46.9%);
+            --accent: hsl(142.1 76.2% 36.3%);
+            --accent-foreground: hsl(355.7 100% 97.3%);
+            --border: hsl(214.3 31.8% 91.4%);
+            --input: hsl(214.3 31.8% 91.4%);
+            --ring: hsl(221.2 83.2% 53.3%);
+            --radius: 0.5rem;
+        }
+        .font-sans {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-background font-sans">
+    <!-- Header -->
+    <header class="bg-card border-b border-border shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-2xl font-bold text-primary">Topping Courier</h1>
+                        <p class="text-xs text-muted-foreground">Express Shipping Solutions</p>
+                    </div>
+                </div>
+                <nav class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="#" class="text-primary font-medium px-3 py-2 rounded-md text-sm">Get Quote</a>
+                        <a href="#" class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm">Track Package</a>
+                        <a href="#" class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm">Contact</a>
+                    </div>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Shipping Quote Form Section -->
+        <div id="quote-section" class="space-y-8">
+            <!-- Page Header -->
+            <div class="text-center">
+                <h2 class="text-3xl font-bold text-foreground">Get Your Shipping Quote</h2>
+                <p class="mt-2 text-muted-foreground">Fast, reliable shipping across Canada and internationally</p>
+            </div>
+
+            <!-- Progress Steps -->
+            <div class="bg-card rounded-lg shadow-sm border border-border p-6">
+                <div class="flex items-center justify-center space-x-8">
+                    <!-- Step 1 -->
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-medium">
+                                1
+                            </div>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-foreground">Addresses</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex-shrink-0 w-16 h-px bg-border"></div>
+                    
+                    <!-- Step 2 -->
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="w-8 h-8 bg-muted text-muted-foreground rounded-full flex items-center justify-center text-sm font-medium">
+                                2
+                            </div>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-muted-foreground">Package Details</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex-shrink-0 w-16 h-px bg-border"></div>
+                    
+                    <!-- Step 3 -->
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="w-8 h-8 bg-muted text-muted-foreground rounded-full flex items-center justify-center text-sm font-medium">
+                                3
+                            </div>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-muted-foreground">Service & Quote</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Container -->
+            <div class="bg-card rounded-lg shadow-sm border border-border">
+                <!-- Step 1: Addresses -->
+                <div id="step-1" class="p-8">
+                    <h3 class="text-xl font-semibold text-foreground mb-6">Shipping Addresses</h3>
+                    
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <!-- Origin Address -->
+                        <div class="space-y-4">
+                            <h4 class="text-lg font-medium text-foreground flex items-center">
+                                <i class="fas fa-map-marker-alt text-primary mr-2"></i>
+                                Origin Address
+                            </h4>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-foreground mb-1">Country</label>
+                                    <select class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+                                        <option value="">Select Country</option>
+                                        <option value="CA" selected>Canada</option>
+                                        <option value="US">United States</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-foreground mb-1">Postal Code</label>
+                                    <input type="text" placeholder="M5V 3A8" class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" data-mock="true">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-foreground mb-1">City</label>
+                                    <input type="text" placeholder="Toronto" class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" data-mock="true">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Destination Address -->
+                        <div class="space-y-4">
+                            <h4 class="text-lg font-medium text-foreground flex items-center">
+                                <i class="fas fa-map-marker-alt text-accent mr-2"></i>
+                                Destination Address
+                            </h4>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-foreground mb-1">Country</label>
+                                    <select class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+                                        <option value="">Select Country</option>
+                                        <option value="CA">Canada</option>
+                                        <option value="US" selected>United States</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-foreground mb-1">Postal Code</label>
+                                    <input type="text" placeholder="10001" class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" data-mock="true">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-foreground mb-1">City</label>
+                                    <input type="text" placeholder="New York" class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" data-mock="true">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Package Details (Hidden initially) -->
+                    <div id="package-details" class="mt-8 pt-8 border-t border-border" style="display: none;">
+                        <h3 class="text-xl font-semibold text-foreground mb-6">Package Details</h3>
+                        
+                        <div class="grid md:grid-cols-2 gap-8">
+                            <!-- Physical Dimensions -->
+                            <div class="space-y-4">
+                                <h4 class="text-lg font-medium text-foreground flex items-center">
+                                    <i class="fas fa-cube text-primary mr-2"></i>
+                                    Dimensions & Weight
+                                </h4>
+                                
+                                <div class="grid grid-cols-3 gap-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-foreground mb-1">Length (cm)</label>
+                                        <input type="number" placeholder="20" class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" data-mock="true">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-foreground mb-1">Width (cm)</label>
+                                        <input type="number" placeholder="15" class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" data-mock="true">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-foreground mb-1">Height (cm)</label>
+                                        <input type="number" placeholder="10" class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" data-mock="true">
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-foreground mb-1">Weight (kg)</label>
+                                    <input type="number" step="0.1" placeholder="2.5" class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" data-mock="true">
+                                </div>
+                            </div>
+
+                            <!-- Package Value & Service -->
+                            <div class="space-y-4">
+                                <h4 class="text-lg font-medium text-foreground flex items-center">
+                                    <i class="fas fa-tag text-accent mr-2"></i>
+                                    Value & Service
+                                </h4>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-foreground mb-1">Package Value (CAD)</label>
+                                    <input type="number" placeholder="150.00" class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" data-mock="true">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-foreground mb-1">Service Type</label>
+                                    <select class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+                                        <option value="">Select Service</option>
+                                        <option value="economy">Economy (5-7 business days)</option>
+                                        <option value="standard" selected>Standard (3-5 business days)</option>
+                                        <option value="express">Express (1-2 business days)</option>
+                                        <option value="overnight">Overnight</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex justify-between mt-8 pt-6 border-t border-border">
+                        <button id="back-btn" class="px-6 py-2 border border-border rounded-md text-muted-foreground hover:text-foreground hover:border-ring transition-colors" style="display: none;">
+                            <i class="fas fa-arrow-left mr-2"></i>Back
+                        </button>
+                        <div class="flex space-x-3">
+                            <button id="next-btn" class="px-8 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors font-medium">
+                                Continue <i class="fas fa-arrow-right ml-2"></i>
+                            </button>
+                            <button id="get-quote-btn" class="px-8 py-2 bg-accent text-accent-foreground rounded-md hover:bg-accent/90 transition-colors font-medium" style="display: none;">
+                                Get Quote <i class="fas fa-calculator ml-2"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quote Results Section (Hidden initially) -->
+        <div id="quote-results" class="space-y-8" style="display: none;">
+            <div class="text-center">
+                <h2 class="text-3xl font-bold text-foreground">Your Shipping Quote</h2>
+                <p class="mt-2 text-muted-foreground">Here's your calculated shipping cost</p>
+            </div>
+
+            <!-- Quote Details Card -->
+            <div class="bg-card rounded-lg shadow-sm border border-border p-8">
+                <div class="grid md:grid-cols-2 gap-8">
+                    <!-- Shipping Summary -->
+                    <div class="space-y-6">
+                        <h3 class="text-xl font-semibold text-foreground">Shipping Details</h3>
+                        
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-center py-2 border-b border-border">
+                                <span class="text-muted-foreground">From:</span>
+                                <span class="font-medium text-foreground" data-bind="origin.display" data-mock="true">Toronto, ON M5V 3A8</span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b border-border">
+                                <span class="text-muted-foreground">To:</span>
+                                <span class="font-medium text-foreground" data-bind="destination.display" data-mock="true">New York, NY 10001</span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b border-border">
+                                <span class="text-muted-foreground">Weight:</span>
+                                <span class="font-medium text-foreground" data-bind="package.weight" data-mock="true">2.5 kg</span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b border-border">
+                                <span class="text-muted-foreground">Dimensions:</span>
+                                <span class="font-medium text-foreground" data-bind="package.dimensions" data-mock="true">20 × 15 × 10 cm</span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b border-border">
+                                <span class="text-muted-foreground">Service:</span>
+                                <span class="font-medium text-foreground" data-bind="service.type" data-mock="true">Standard (3-5 days)</span>
+                            </div>
+                            <div class="flex justify-between items-center py-2">
+                                <span class="text-muted-foreground">Package Value:</span>
+                                <span class="font-medium text-foreground" data-bind="package.value" data-mock="true">$150.00 CAD</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Price Breakdown -->
+                    <div class="space-y-6">
+                        <h3 class="text-xl font-semibold text-foreground">Price Breakdown</h3>
+                        
+                        <div class="bg-muted rounded-lg p-6 space-y-4">
+                            <div class="flex justify-between items-center">
+                                <span class="text-muted-foreground">Base Rate:</span>
+                                <span class="font-medium text-foreground" data-bind="pricing.baseRate" data-mock="true">$24.99</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-muted-foreground">Service Markup (50%):</span>
+                                <span class="font-medium text-foreground" data-bind="pricing.markup" data-mock="true">$12.50</span>
+                            </div>
+                            <div class="flex justify-between items-center pb-4 border-b border-border">
+                                <span class="text-muted-foreground">Subtotal:</span>
+                                <span class="font-medium text-foreground" data-bind="pricing.subtotal" data-mock="true">$37.49</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-muted-foreground">Tax (13%):</span>
+                                <span class="font-medium text-foreground" data-bind="pricing.tax" data-mock="true">$4.87</span>
+                            </div>
+                            <div class="flex justify-between items-center pt-4 border-t border-border">
+                                <span class="text-lg font-semibold text-foreground">Total:</span>
+                                <span class="text-2xl font-bold text-primary" data-bind="pricing.total" data-mock="true">$42.36</span>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="space-y-3">
+                            <button id="generate-invoice-btn" class="w-full px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors font-medium">
+                                <i class="fas fa-file-invoice mr-2"></i>Generate Invoice
+                            </button>
+                            <button id="new-quote-btn" class="w-full px-6 py-3 border border-border rounded-md text-foreground hover:bg-muted transition-colors">
+                                <i class="fas fa-plus mr-2"></i>New Quote
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Invoice Section (Hidden initially) -->
+        <div id="invoice-section" class="space-y-8" style="display: none;">
+            <div class="text-center">
+                <h2 class="text-3xl font-bold text-foreground">Invoice</h2>
+                <p class="mt-2 text-muted-foreground">Your shipping quote invoice</p>
+            </div>
+
+            <!-- Invoice Document -->
+            <div class="bg-card rounded-lg shadow-lg border border-border max-w-4xl mx-auto">
+                <!-- Invoice Header -->
+                <div class="p-8 border-b border-border">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h1 class="text-3xl font-bold text-primary">Topping Courier Inc.</h1>
+                            <div class="mt-2 text-muted-foreground">
+                                <p>87 Windrow Street</p>
+                                <p>Tel: 647-339-0222</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <h2 class="text-2xl font-bold text-foreground">INVOICE</h2>
+                            <div class="mt-2 text-muted-foreground">
+                                <p>Invoice #: <span class="font-medium text-foreground" data-bind="invoice.number" data-mock="true">INV-2024-001</span></p>
+                                <p>Date: <span class="font-medium text-foreground" data-bind="invoice.date" data-mock="true">January 15, 2024</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Customer & Shipping Information -->
+                <div class="p-8 border-b border-border">
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div>
+                            <h3 class="text-lg font-semibold text-foreground mb-4">Bill To:</h3>
+                            <div class="text-muted-foreground space-y-1">
+                                <p class="font-medium text-foreground" data-bind="customer.name" data-mock="true">John Smith</p>
+                                <p data-bind="customer.company" data-mock="true">ABC Company</p>
+                                <p data-bind="customer.email" data-mock="true">john.smith@example.com</p>
+                                <p data-bind="customer.phone" data-mock="true">(416) 555-0123</p>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-foreground mb-4">Shipping Route:</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <p class="font-medium text-foreground">From:</p>
+                                    <p class="text-muted-foreground" data-bind="shipping.origin" data-mock="true">Toronto, ON M5V 3A8, Canada</p>
+                                </div>
+                                <div>
+                                    <p class="font-medium text-foreground">To:</p>
+                                    <p class="text-muted-foreground" data-bind="shipping.destination" data-mock="true">New York, NY 10001, United States</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Package Details Table -->
+                <div class="p-8 border-b border-border">
+                    <h3 class="text-lg font-semibold text-foreground mb-4">Package Details</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="border-b border-border">
+                                    <th class="text-left py-2 text-muted-foreground font-medium">Description</th>
+                                    <th class="text-left py-2 text-muted-foreground font-medium">Dimensions</th>
+                                    <th class="text-left py-2 text-muted-foreground font-medium">Weight</th>
+                                    <th class="text-left py-2 text-muted-foreground font-medium">Value</th>
+                                    <th class="text-right py-2 text-muted-foreground font-medium">Service</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="border-b border-border">
+                                    <td class="py-3 text-foreground" data-bind="package.description" data-mock="true">Standard Package</td>
+                                    <td class="py-3 text-muted-foreground" data-bind="package.dimensions" data-mock="true">20 × 15 × 10 cm</td>
+                                    <td class="py-3 text-muted-foreground" data-bind="package.weight" data-mock="true">2.5 kg</td>
+                                    <td class="py-3 text-muted-foreground" data-bind="package.value" data-mock="true">$150.00</td>
+                                    <td class="py-3 text-right text-muted-foreground" data-bind="service.name" data-mock="true">Standard (3-5 days)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Invoice Totals -->
+                <div class="p-8">
+                    <div class="flex justify-end">
+                        <div class="w-80">
+                            <div class="space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-muted-foreground">Base Shipping Rate:</span>
+                                    <span class="font-medium text-foreground" data-bind="invoice.baseRate" data-mock="true">$24.99</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-muted-foreground">Service Markup (50%):</span>
+                                    <span class="font-medium text-foreground" data-bind="invoice.markup" data-mock="true">$12.50</span>
+                                </div>
+                                <div class="flex justify-between items-center pb-3 border-b border-border">
+                                    <span class="text-muted-foreground">Subtotal:</span>
+                                    <span class="font-medium text-foreground" data-bind="invoice.subtotal" data-mock="true">$37.49</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-muted-foreground">Tax (13% HST):</span>
+                                    <span class="font-medium text-foreground" data-bind="invoice.tax" data-mock="true">$4.87</span>
+                                </div>
+                                <div class="flex justify-between items-center pt-3 border-t-2 border-primary">
+                                    <span class="text-xl font-bold text-foreground">Total Amount:</span>
+                                    <span class="text-2xl font-bold text-primary" data-bind="invoice.total" data-mock="true">$42.36 CAD</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Invoice Actions -->
+                    <div class="flex justify-center space-x-4 mt-8 pt-6 border-t border-border">
+                        <button id="download-pdf-btn" class="px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors font-medium">
+                            <i class="fas fa-download mr-2"></i>Download PDF
+                        </button>
+                        <button id="print-invoice-btn" class="px-6 py-3 border border-border rounded-md text-foreground hover:bg-muted transition-colors">
+                            <i class="fas fa-print mr-2"></i>Print Invoice
+                        </button>
+                        <button id="email-invoice-btn" class="px-6 py-3 border border-border rounded-md text-foreground hover:bg-muted transition-colors">
+                            <i class="fas fa-envelope mr-2"></i>Email Invoice
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-card border-t border-border mt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="text-center">
+                <p class="text-muted-foreground">© 2024 Topping Courier Inc. All rights reserved.</p>
+                <p class="text-sm text-muted-foreground mt-2">87 Windrow Street | Tel: 647-339-0222</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript for Form Interactions -->
+    <script>
+        (function() {
+            let currentStep = 1;
+            const maxSteps = 3;
+
+            // DOM Elements
+            const quoteSection = document.getElementById('quote-section');
+            const quoteResults = document.getElementById('quote-results');
+            const invoiceSection = document.getElementById('invoice-section');
+            const packageDetails = document.getElementById('package-details');
+            const nextBtn = document.getElementById('next-btn');
+            const backBtn = document.getElementById('back-btn');
+            const getQuoteBtn = document.getElementById('get-quote-btn');
+            const generateInvoiceBtn = document.getElementById('generate-invoice-btn');
+            const newQuoteBtn = document.getElementById('new-quote-btn');
+            const downloadPdfBtn = document.getElementById('download-pdf-btn');
+            const printInvoiceBtn = document.getElementById('print-invoice-btn');
+
+            // Step Navigation
+            function updateStepIndicators() {
+                const steps = document.querySelectorAll('.w-8.h-8');
+                steps.forEach((step, index) => {
+                    const stepNumber = index + 1;
+                    if (stepNumber <= currentStep) {
+                        step.className = 'w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-medium';
+                        step.nextElementSibling.querySelector('p').className = 'text-sm font-medium text-foreground';
+                    } else {
+                        step.className = 'w-8 h-8 bg-muted text-muted-foreground rounded-full flex items-center justify-center text-sm font-medium';
+                        step.nextElementSibling.querySelector('p').className = 'text-sm font-medium text-muted-foreground';
+                    }
+                });
+            }
+
+            // Event Listeners
+            nextBtn.addEventListener('click', function() {
+                if (currentStep === 1) {
+                    currentStep = 2;
+                    packageDetails.style.display = 'block';
+                    backBtn.style.display = 'block';
+                    nextBtn.style.display = 'none';
+                    getQuoteBtn.style.display = 'block';
+                    updateStepIndicators();
+                }
+            });
+
+            backBtn.addEventListener('click', function() {
+                if (currentStep === 2) {
+                    currentStep = 1;
+                    packageDetails.style.display = 'none';
+                    backBtn.style.display = 'none';
+                    nextBtn.style.display = 'block';
+                    getQuoteBtn.style.display = 'none';
+                    updateStepIndicators();
+                }
+            });
+
+            getQuoteBtn.addEventListener('click', function() {
+                // TODO: Implement API call to Stallion Express and pricing calculation
+                quoteSection.style.display = 'none';
+                quoteResults.style.display = 'block';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+
+            generateInvoiceBtn.addEventListener('click', function() {
+                quoteResults.style.display = 'none';
+                invoiceSection.style.display = 'block';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+
+            newQuoteBtn.addEventListener('click', function() {
+                // Reset form
+                currentStep = 1;
+                quoteResults.style.display = 'none';
+                quoteSection.style.display = 'block';
+                packageDetails.style.display = 'none';
+                backBtn.style.display = 'none';
+                nextBtn.style.display = 'block';
+                getQuoteBtn.style.display = 'none';
+                updateStepIndicators();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+
+            downloadPdfBtn.addEventListener('click', function() {
+                // TODO: Implement PDF generation
+                alert('PDF download functionality would be implemented here.');
+            });
+
+            printInvoiceBtn.addEventListener('click', function() {
+                window.print();
+            });
+
+            // Initialize
+            updateStepIndicators();
+        })();
+    </script>
+</body>
+</html>
