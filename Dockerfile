@@ -5,19 +5,17 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package files first
+COPY package.json package-lock.json ./
 
 # Install ALL dependencies (including devDependencies for build)
 RUN npm ci
 
-# Copy configuration files
-COPY tsconfig*.json vite.config.ts tailwind.config.ts postcss.config.js ./
-
-# Copy source code
-COPY client ./client
-COPY server/index.js ./server/index.js
-COPY shared ./shared
+# Copy all necessary files for build
+COPY tsconfig.json tsconfig.node.json vite.config.ts tailwind.config.ts postcss.config.js ./
+COPY client/ ./client/
+COPY server/ ./server/
+COPY shared/ ./shared/
 
 # Build frontend (outputs to server/public/)
 RUN npm run build
@@ -35,19 +33,19 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package.json package-lock.json ./
 
 # Install ONLY production dependencies
 RUN npm ci --omit=dev
 
 # Copy shared code
-COPY shared ./shared
+COPY shared/ ./shared/
 
 # Copy server code
-COPY server/index.js ./server/index.js
+COPY server/ ./server/
 
 # Copy built frontend from builder stage
-COPY --from=builder /app/server/public ./server/public
+COPY --from=builder /app/server/public/ ./server/public/
 
 # Verify production files
 RUN echo "=== Production verification ===" && \
