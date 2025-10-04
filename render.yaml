@@ -1,11 +1,9 @@
 services:
   - type: web
     name: topping-express-usca
-    env: node
+    env: docker
     plan: starter
     autoDeploy: true
-    buildCommand: npm install && npm run build
-    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
@@ -13,10 +11,14 @@ services:
         value: 10000
       - key: DATABASE_URL
         sync: false
-      - key: postmark_API_Tokens
+      - key: STALLION_API_KEY
         sync: false
-      - key: STALLION_API_TOKEN
+      - key: STALLION_API_URL
+        value: https://api.stallionexpress.ca
+      - key: POSTMARK_API_KEY
         sync: false
+      - key: POSTMARK_FROM_EMAIL
+        value: no-reply@toppingcourier.ca
       - key: ADMIN_EMAIL
         value: toppingcourier.ca@gmail.com
       - key: SESSION_SECRET

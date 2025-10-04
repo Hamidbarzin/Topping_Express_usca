@@ -6,7 +6,10 @@ import { randomUUID } from "crypto";
 import pkg from "pg";
 const { Pool } = pkg;
 import { v4 as uuidv4 } from "uuid";
-import postmark from "postmark";
+
+// Import configuration and services
+import { config } from "./config.js";
+import { initMailer, sendCustomerConfirmation, sendAdminNotification } from "./mailer.js";
 
 // Resolve __dirname in ESM
 import { fileURLToPath } from 'url';
@@ -25,15 +28,14 @@ let pool = null;
 // Initialize database connection
 async function initDatabase() {
   try {
-    const databaseUrl = process.env.DATABASE_URL;
-    if (!databaseUrl) {
+    if (!config.databaseUrl) {
       log("DATABASE_URL not found, using in-memory storage", "warn");
       return null;
     }
 
     pool = new Pool({
-      connectionString: databaseUrl,
-      ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+      connectionString: config.databaseUrl,
+      ssl: config.nodeEnv === "production" ? { rejectUnauthorized: false } : false,
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 2000,
@@ -44,14 +46,14 @@ async function initDatabase() {
     await client.query("SELECT NOW()");
     client.release();
 
-    log("Database connected successfully", "db");
+    log("✅ Database connected successfully", "db");
     
     // Create orders table if it doesn't exist
     await createOrdersTable();
     
     return pool;
   } catch (error) {
-    log(`Database connection failed: ${error.message}`, "error");
+    log(`❌ Database connection failed: ${error.message}`, "error");
     return null;
   }
 }
@@ -188,26 +190,8 @@ async function getOrderById(orderId) {
   }
 }
 
-// Email service
+// Email service (initialized from mailer module)
 let postmarkClient = null;
-
-// Initialize Postmark client
-function initEmailService() {
-  try {
-    const postmarkToken = process.env.postmark_API_Tokens;
-    if (!postmarkToken) {
-      log("postmark_API_Tokens not found, email notifications disabled", "warn");
-      return null;
-    }
-
-    postmarkClient = new postmark.ServerClient(postmarkToken);
-    log("Postmark email service initialized successfully", "email");
-    return postmarkClient;
-  } catch (error) {
-    log(`Email service initialization failed: ${error.message}`, "error");
-    return null;
-  }
-}
 
 // Get app URL for emails
 function getAppUrl() {
@@ -498,45 +482,28 @@ function createAdminEmailTemplate(order, appUrl = getAppUrl()) {
 
 // Send email notifications
 async function sendOrderNotifications(order) {
-  if (!postmarkClient) {
-    log("Postmark client not available, skipping email notifications", "warn");
-    return;
+  try {
+    // Send customer confirmation email
+    const customerResult = await sendCustomerConfirmation(order);
+    if (customerResult.success) {
+      log(`✅ Customer email sent to ${order.recipient.email}`, "email");
+    } else {
+      log(`⚠️  Customer email not sent: ${customerResult.reason || customerResult.error}`, "warn");
+    }
+  } catch (error) {
+    log(`❌ Failed to send customer email: ${error.message}`, "error");
   }
 
   try {
-    // Send customer email
-    const customerEmail = {
-      From: "noreply@toppingcourier.ca",
-      To: order.recipient.email,
-      Subject: `Your Order Confirmation - ${order.orderNumber}`,
-      HtmlBody: createCustomerEmailTemplate(order),
-      MessageStream: "outbound"
-    };
-
-    await postmarkClient.sendEmail(customerEmail);
-    log(`Customer email sent successfully to ${order.recipient.email}`, "email");
-
+    // Send admin notification email
+    const adminResult = await sendAdminNotification(order);
+    if (adminResult.success) {
+      log(`✅ Admin email sent to ${config.adminEmail}`, "email");
+    } else {
+      log(`⚠️  Admin email not sent: ${adminResult.reason || adminResult.error}`, "warn");
+    }
   } catch (error) {
-    log(`Failed to send customer email: ${error.message}`, "error");
-  }
-
-  try {
-    // Send admin email
-    const adminEmail = process.env.ADMIN_EMAIL || "toppingcourier.ca@gmail.com";
-    
-    const adminEmailData = {
-      From: "noreply@toppingcourier.ca",
-      To: adminEmail,
-      Subject: `New Order Received - ${order.orderNumber}`,
-      HtmlBody: createAdminEmailTemplate(order),
-      MessageStream: "outbound"
-    };
-
-    await postmarkClient.sendEmail(adminEmailData);
-    log(`Admin email sent successfully to ${adminEmail}`, "email");
-
-  } catch (error) {
-    log(`Failed to send admin email: ${error.message}`, "error");
+    log(`❌ Failed to send admin email: ${error.message}`, "error");
   }
 }
 
@@ -550,19 +517,42 @@ app.get("/api/health", (_req, res) => {
     ok: true, 
     uptime: process.uptime(),
     database: pool ? "connected" : "disconnected",
-    email: postmarkClient ? "connected" : "disconnected"
+    email: postmarkClient ? "connected" : "disconnected",
+    nodeEnv: config.nodeEnv
+  });
+});
+
+// Debug endpoint (development only)
+app.get("/api/debug/env", (_req, res) => {
+  if (config.nodeEnv === 'production') {
+    return res.status(403).json({ error: "Not available in production" });
+  }
+  
+  res.json({
+    nodeEnv: config.nodeEnv,
+    port: config.port,
+    envVars: {
+      DATABASE_URL: config.databaseUrl ? "✓ Set" : "✗ Missing",
+      STALLION_API_KEY: config.stallionApiKey ? "✓ Set" : "✗ Missing",
+      STALLION_API_URL: config.stallionApiUrl,
+      POSTMARK_API_KEY: config.postmarkApiKey ? "✓ Set" : "✗ Missing",
+      POSTMARK_FROM_EMAIL: config.postmarkFromEmail,
+      ADMIN_EMAIL: config.adminEmail,
+      SESSION_SECRET: config.sessionSecret ? "✓ Set" : "✗ Missing"
+    }
   });
 });
 
 // Shipping quote endpoint
-const SHIPPING_API_URL = "https://ship.stallionexpress.ca/api/v4/rates";
 app.post("/api/quote", async (req, res) => {
   try {
-    const token = process.env.STALLION_API_TOKEN;
-    log(`Quote request received. Token exists: ${!!token}`, "quote");
-    if (!token) {
-      log("STALLION_API_TOKEN not found in environment", "error");
-      return res.status(500).json({ message: "API token not configured" });
+    log(`Quote request received. API configured: ${!!config.stallionApiKey}`, "quote");
+    if (!config.stallionApiKey) {
+      log("❌ STALLION_API_KEY not configured", "error");
+      return res.status(500).json({ 
+        message: "Shipping API not configured",
+        error: "STALLION_API_KEY missing"
+      });
     }
 
     // Support both formats: {origin, destination, package} and {sender, recipient, packageInfo}
@@ -610,12 +600,12 @@ app.post("/api/quote", async (req, res) => {
       package_contents: packageInfo.description || "General Package"
     };
 
-    log(`Making request to Stallion API: ${JSON.stringify(shippingRequest)}`, "quote");
+    log(`Making request to Stallion API: ${config.stallionApiUrl}/api/v4/rates`, "quote");
 
-    const response = await fetch(SHIPPING_API_URL, {
+    const response = await fetch(`${config.stallionApiUrl}/api/v4/rates`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${token}`,
+        "Authorization": `Bearer ${config.stallionApiKey}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(shippingRequest)
@@ -623,18 +613,30 @@ app.post("/api/quote", async (req, res) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      log(`Stallion API error ${response.status}: ${errorText}`, "error");
+      log(`❌ Stallion API error ${response.status}: ${errorText}`, "error");
+      
+      // Provide helpful error messages
+      let errorMessage = "Failed to get shipping rates";
+      if (response.status === 401) {
+        errorMessage = "Invalid API credentials - check STALLION_API_KEY";
+      } else if (response.status === 400) {
+        errorMessage = "Invalid postal codes or package details";
+      } else if (response.status >= 500) {
+        errorMessage = "Stallion API service unavailable";
+      }
+      
       return res.status(200).json({ 
         rates: [],
         error: {
-          message: "Failed to get shipping rates",
-          details: errorText
+          message: errorMessage,
+          details: errorText,
+          status: response.status
         }
       });
     }
 
     const data = await response.json();
-    log(`Received ${data?.rates?.length || 0} rates from Stallion API`, "quote");
+    log(`✅ Received ${data?.rates?.length || 0} rates from Stallion API`, "quote");
     
     // Ensure rates is always an array
     if (!data || !Array.isArray(data.rates)) {
@@ -701,12 +703,11 @@ app.post("/api/orders", async (req, res) => {
     }
 
     // Check API token
-    const token = process.env.STALLION_API_TOKEN;
-    if (!token) {
-      log("STALLION_API_TOKEN not found in environment", "error");
+    if (!config.stallionApiKey) {
+      log("❌ STALLION_API_KEY not configured", "error");
       return res.status(500).json({
         success: false,
-        message: "API token not configured"
+        message: "Shipping API not configured"
       });
     }
 
@@ -772,10 +773,10 @@ app.post("/api/orders", async (req, res) => {
     log(`Service: ${selectedService.carrier} - ${selectedService.name}`, "order");
 
     // Make request to Stallion API
-    const stallionResponse = await fetch("https://api.stallionexpress.ca/api/v1/orders", {
+    const stallionResponse = await fetch(`${config.stallionApiUrl}/api/v1/orders`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${token}`,
+        "Authorization": `Bearer ${config.stallionApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(stallionOrderData),
@@ -928,12 +929,11 @@ app.post("/api/order", async (req, res) => {
     }
 
     // Check API token
-    const token = process.env.STALLION_API_TOKEN;
-    if (!token) {
-      log("STALLION_API_TOKEN not found in environment", "error");
+    if (!config.stallionApiKey) {
+      log("❌ STALLION_API_KEY not configured", "error");
       return res.status(500).json({
         success: false,
-        message: "API token not configured"
+        message: "Shipping API not configured"
       });
     }
 
@@ -996,10 +996,10 @@ app.post("/api/order", async (req, res) => {
     log(`Creating order ${orderNumber} with Stallion API (legacy endpoint)`, "order");
 
     // Make request to Stallion API
-    const stallionResponse = await fetch("https://api.stallionexpress.ca/api/v1/orders", {
+    const stallionResponse = await fetch(`${config.stallionApiUrl}/api/v1/orders`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${token}`,
+        "Authorization": `Bearer ${config.stallionApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(stallionOrderData),
@@ -1320,22 +1320,31 @@ app.get("*", (_req, res) => {
 // Initialize database and start server
 async function startServer() {
   try {
+    // Log startup configuration
+    log(`🚀 Starting Topping Express API Server`, "startup");
+    log(`   NODE_ENV: ${config.nodeEnv}`, "startup");
+    log(`   PORT: ${config.port}`, "startup");
+    
     // Initialize database
     await initDatabase();
     
     // Initialize email service
-    initEmailService();
+    postmarkClient = initMailer();
     
-    const port = parseInt(process.env.PORT || "3000", 10);
-    const host = process.env.HOST || (process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost");
+    const host = "0.0.0.0"; // Always bind to 0.0.0.0 for Docker/Render
     
-    app.listen(port, host, () => {
-      log(`🚀 Server listening on ${host}:${port} (${process.env.NODE_ENV || 'development'} mode)`);
-      log(`📊 Database: ${pool ? "Connected ✓" : "Not available (using mock data)"}`);
-      log(`📧 Email Service: ${postmarkClient ? "Connected ✓" : "Not available (emails disabled)"}`);
+    app.listen(config.port, host, () => {
+      log(`✅ Server listening on ${host}:${config.port}`, "server");
+      log(`📊 Database: ${pool ? "✓ Connected" : "✗ Disconnected (using in-memory)"}`, "server");
+      log(`📧 Email: ${postmarkClient ? "✓ Configured" : "✗ Disabled"}`, "server");
+      log(`🔑 Stallion API: ${config.stallionApiKey ? "✓ Configured" : "✗ Missing"}`, "server");
+      
+      if (config.nodeEnv === 'production') {
+        log(`🌐 Production mode - using Render environment variables`, "server");
+      }
     });
   } catch (error) {
-    log(`Failed to start server: ${error.message}`, "error");
+    log(`❌ Failed to start server: ${error.message}`, "error");
     process.exit(1);
   }
 }
